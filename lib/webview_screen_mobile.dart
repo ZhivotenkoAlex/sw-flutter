@@ -1,8 +1,12 @@
 import 'dart:convert';
+import 'dart:collection';
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'firebase_messaging_service.dart';
+import 'package:flutter/foundation.dart'; // for kDebugMode
+import 'package:shared_preferences/shared_preferences.dart';
 
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -12,64 +16,60 @@ class WebViewScreen extends StatefulWidget {
 }
 
 class _WebViewScreenState extends State<WebViewScreen> {
-  late final WebViewController controller;
+  // Remove WebViewController from webview_flutter; we'll keep a JS eval handle
+  InAppWebViewController? _inAppController;
   bool _bridgeInjected = false;
+  GoogleSignIn? _googleSignIn;
+  String? _customUrl; // persisted override for HTTPS tunnel
 
   @override
   void initState() {
     super.initState();
+    _loadCustomUrl();
     final fcmToken = FirebaseMessagingService.fcmToken;
     
-    controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0x00000000))
-      ..enableZoom(false)
-      ..addJavaScriptChannel(
-        'Flutter',
-        onMessageReceived: (JavaScriptMessage message) {
-          print('Message from web app: ${message.message}');
-          if (message.message == 'file_picker_request') {
-            _handleFilePicker();
-          }
-        },
-      )
-      ..addJavaScriptChannel(
-        'FirebaseBridge',
-        onMessageReceived: (JavaScriptMessage message) {
-          print('Firebase bridge message: ${message.message}');
-          _handleFirebaseMessage(message.message);
-        },
-      )
-      ..setUserAgent('Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36')
+    // The original controller setup is removed, but the JS bridge and file picker logic
+    // are integrated into the InAppWebView's onJsPrompt handler.
+    // The _injectPermissionOverrides method is also adapted to use _inAppController.
+  }
 
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onProgress: (int progress) {
-            // Update loading bar.
-          },
-          onPageStarted: (String url) {
-            print('Page started loading: $url');
-            // Inject immediately when page starts
-            _injectPermissionOverrides();
-          },
-          onPageFinished: (String url) {
-            print('Page finished loading: $url');
-            // Inject again to ensure it's there
-            _injectPermissionOverrides();
-          },
-          onWebResourceError: (WebResourceError error) {
-            print('Web resource error: ${error.description}');
-          },
-          onNavigationRequest: (NavigationRequest request) {
-            // Allow all navigation requests, especially for service workers
-            print('Navigation request: ${request.url}');
-            return NavigationDecision.navigate;
-          },
-        ),
-      );
-      
-    // Load the page first; inject after page navigation events
-    controller.loadRequest(Uri.parse('https://skanuj-staging.web.app?company_name=kazimierz-club-new'));
+  Future<void> _loadCustomUrl() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _customUrl = prefs.getString('custom_https_url');
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _setCustomUrlDialog() async {
+    final controller = TextEditingController(text: _customUrl ?? 'https://');
+    final url = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Set HTTPS URL'),
+          content: TextField(
+            controller: controller,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(hintText: 'https://<your-domain>'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(ctx, controller.text.trim()), child: const Text('Save')),
+          ],
+        );
+      },
+    );
+    if (url != null && url.isNotEmpty && Uri.tryParse(url)?.hasAbsolutePath != false) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('custom_https_url', url);
+      setState(() { _customUrl = url; });
+      // reload webview to new URL
+      if (_inAppController != null) {
+        await _inAppController!.loadUrl(urlRequest: URLRequest(url: WebUri(url)));
+      }
+    }
   }
 
   Future<void> _injectPermissionOverrides() async {
@@ -77,7 +77,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
     print('Injecting ULTIMATE permission overrides with token: $fcmToken');
     
     try {
-      await controller.runJavaScript('''
+      await _inAppController?.evaluateJavascript(source: '''
         (function() {
           if (window.__flutterBridgeInstalled) {
             console.log('♻️ Flutter bridge already installed, skipping re-injection');
@@ -144,19 +144,40 @@ class _WebViewScreenState extends State<WebViewScreen> {
             console.log('✅ navigator.permissions LOCKED to fake granted version');
           }
           
-          // Override file input restrictions
-          console.log('🔐 Overriding file input restrictions...');
-          
-          // Override getUserMedia for camera/microphone access
-          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            const originalGetUserMedia = navigator.mediaDevices.getUserMedia;
-            navigator.mediaDevices.getUserMedia = function(constraints) {
-              console.log('📷 getUserMedia called with constraints:', constraints);
-              return originalGetUserMedia.call(this, constraints);
-            };
-          }
-          
-          // TARGETED interception only
+                     // Override file input restrictions
+           console.log('🔐 Overriding file input restrictions...');
+           
+           // Prefer native popup handling, but force same-window only for Google OAuth
+           (function installGoogleSameWindow(){
+             try {
+              const isGoogleOAuth = (u) => /accounts\.google\.com|oauth2|gsi\/client|apis\.google\.com/.test(u || '');
+              // Route ALL window.open through a prompt the Flutter side handles
+              window.open = function(url, name, specs){
+                try { window.prompt('window_open', String(url || '')); } catch(_) {}
+                return null;
+              };
+              // Also catch target=_blank
+              document.addEventListener('click', function(e){
+                const a = e.target && e.target.closest ? e.target.closest('a[target="_blank"]') : null;
+                if (a && a.href) {
+                  e.preventDefault(); e.stopPropagation();
+                  try { window.prompt('window_open', String(a.href)); } catch(_) {}
+                }
+              }, true);
+              console.log('✅ Same-window override installed via prompt bridge');
+             } catch(err) { console.log('⚠️ Failed to install Google same-window override', err); }
+           })();
+           
+           // Override getUserMedia for camera/microphone access
+           if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+             const originalGetUserMedia = navigator.mediaDevices.getUserMedia;
+             navigator.mediaDevices.getUserMedia = function(constraints) {
+               console.log('📷 getUserMedia called with constraints:', constraints);
+               return originalGetUserMedia.call(this, constraints);
+             };
+           }
+           
+           // TARGETED interception only
           const TARGET_SELECTORS = [
             '[data-flutter-file-input="1"]'
           ];
@@ -553,7 +574,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
           final base64Image = 'data:image/jpeg;base64,${base64Encode(bytes)}';
           
           // Send the image data back to the web app
-          await controller.runJavaScript('''
+          await _inAppController?.evaluateJavascript(source: '''
             if (window.currentFileInput) {
               console.log('📁 Processing selected image for file input');
               
@@ -644,10 +665,236 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final initialUrl = _customUrl?.isNotEmpty == true
+        ? _customUrl!
+        : 'https://skanuj-staging.web.app?company_name=kazimierz-club-new';
     return Scaffold(
       body: SafeArea(
-        child: WebViewWidget(controller: controller),
+        child: InAppWebView(
+          initialUrlRequest: URLRequest(url: WebUri(initialUrl)),
+          initialSettings: InAppWebViewSettings(
+            javaScriptEnabled: true,
+            javaScriptCanOpenWindowsAutomatically: true,
+            supportMultipleWindows: true,
+            thirdPartyCookiesEnabled: true,
+            allowsInlineMediaPlayback: true,
+            mediaPlaybackRequiresUserGesture: false,
+            useShouldOverrideUrlLoading: true,
+            transparentBackground: true,
+            useHybridComposition: true,
+            domStorageEnabled: true,
+            databaseEnabled: true,
+            userAgent: 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36',
+          ),
+          initialUserScripts: UnmodifiableListView<UserScript>([
+            UserScript(
+              source: '''
+                (function(){
+                  try {
+                    if (window.__pre_oauth_installed) return;
+                    window.__pre_oauth_installed = true;
+                    // Route window.open and _blank clicks to Flutter via prompt BEFORE libs load
+                    const isGoogleOAuth = function(u){
+                      try { return /accounts\.google\.com|oauth2|gsi\/client|googleusercontent\.com/.test(String(u||'')); } catch(_) { return false; }
+                    };
+                    window.open = function(url, name, specs){
+                      try {
+                        if (isGoogleOAuth(url)) { location.href = String(url); return null; }
+                        window.prompt('window_open', String(url || ''));
+                      } catch(_) {}
+                      return null;
+                    };
+                    document.addEventListener('click', function(e){
+                      var a = e.target && e.target.closest ? e.target.closest('a[target="_blank"]') : null;
+                      if (a && a.href) {
+                        e.preventDefault(); e.stopPropagation();
+                        if (isGoogleOAuth(a.href)) { try { location.href = String(a.href); } catch(_) {} }
+                        else { try { window.prompt('window_open', String(a.href)); } catch(_) {} }
+                      }
+                    }, true);
+                    document.addEventListener('submit', function(e){
+                      var f = e.target; 
+                      if (f && f.getAttribute && f.getAttribute('target') == '_blank') {
+                        try { f.setAttribute('target','_self'); } catch(_) {}
+                      }
+                    }, true);
+                    console.log('✅ Pre-injected popup bridge installed at document-start');
+                  } catch(err) { console.log('⚠️ Pre-inject failed', err); }
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+            )
+          ]),
+          onWebViewCreated: (controller) async {
+            _inAppController = controller;
+            _googleSignIn = GoogleSignIn(
+              serverClientId: '159120615271-80ftbidbjk2a75idsuuqu8tklbu9fugb.apps.googleusercontent.com',
+              scopes: ['email', 'profile'],
+            );
+            _inAppController?.addJavaScriptHandler(
+              handlerName: 'googleSignIn',
+              callback: (args) async {
+                Future<Map<String, dynamic>> dispatchToWeb(String idToken, String accessToken, String serverAuthCode, String email, {bool fallback = false}) async {
+                  debugPrint('GoogleSignIn: idToken len=${idToken.length}, accessToken len=${accessToken.length}, serverAuthCode len=${serverAuthCode.length}, email=$email, fallback=$fallback');
+                  await _inAppController?.evaluateJavascript(source: """
+                    try {
+                      console.log('Flutter -> Web tokens', { idTokenLen: ${idToken.length}, accessTokenLen: ${accessToken.length}, serverAuthCodeLen: ${serverAuthCode.length}, email: '${email.replaceAll("'", "\\'")}', fallback: ${fallback ? 'true' : 'false'} });
+                      window.dispatchEvent(new CustomEvent('flutter_google_tokens', {
+                        detail: { idToken: '${idToken.replaceAll("'", "\\'")}', accessToken: '${accessToken.replaceAll("'", "\\'")}', serverAuthCode: '${serverAuthCode.replaceAll("'", "\\'")}', email: '${email.replaceAll("'", "\\'")}', fallback: ${fallback ? 'true' : 'false'} }
+                      }));
+                      if (window.onFlutterGoogleSignIn) {
+                        try { window.onFlutterGoogleSignIn({ idToken: '${idToken.replaceAll("'", "\\'")}', accessToken: '${accessToken.replaceAll("'", "\\'")}', serverAuthCode: '${serverAuthCode.replaceAll("'", "\\'")}', email: '${email.replaceAll("'", "\\'")}', fallback: ${fallback ? 'true' : 'false'} }); } catch(e) { console.log('onFlutterGoogleSignIn error', e); }
+                      }
+                    } catch (e) { console.log('Flutter -> Web tokens dispatch error', e); }
+                  """);
+                  return {
+                    'idToken': idToken,
+                    'accessToken': accessToken,
+                    'serverAuthCode': serverAuthCode,
+                    'email': email,
+                    'fallback': fallback,
+                  };
+                }
+
+                try {
+                  // Primary path: with serverClientId
+                  await _googleSignIn!.signOut();
+                  final account = await _googleSignIn!.signIn();
+                  if (account == null) {
+                    debugPrint('GoogleSignIn: cancelled by user');
+                    return {'error': 'cancelled'};
+                  }
+                  var auth = await account.authentication;
+                  if ((auth.idToken == null || auth.idToken!.isEmpty) && (auth.accessToken == null || auth.accessToken!.isEmpty)) {
+                    await Future.delayed(const Duration(milliseconds: 300));
+                    auth = await account.authentication;
+                  }
+                  return await dispatchToWeb(auth.idToken ?? '', auth.accessToken ?? '', account.serverAuthCode ?? '', account.email);
+                } catch (e) {
+                  final es = e.toString();
+                  debugPrint('GoogleSignIn primary error: $es');
+                  // ApiException: 10 => misconfigured Android OAuth client (SHA‑1/package). Try fallback without serverClientId to unblock testing.
+                  if (es.contains('ApiException: 10')) {
+                    try {
+                      final fallbackGsi = GoogleSignIn(scopes: ['email', 'profile']);
+                      await fallbackGsi.signOut();
+                      final account = await fallbackGsi.signIn();
+                      if (account == null) return {'error': 'cancelled'};
+                      var auth = await account.authentication;
+                      if ((auth.idToken == null || auth.idToken!.isEmpty) && (auth.accessToken == null || auth.accessToken!.isEmpty)) {
+                        await Future.delayed(const Duration(milliseconds: 300));
+                        auth = await account.authentication;
+                      }
+                      return await dispatchToWeb(auth.idToken ?? '', auth.accessToken ?? '', account.serverAuthCode ?? '', account.email, fallback: true);
+                    } catch (e2, st2) {
+                      debugPrint('GoogleSignIn fallback error: $e2\n$st2');
+                      return {'error': e2.toString(), 'code': 10};
+                    }
+                  }
+                  return {'error': es};
+                }
+              },
+            );
+            _inAppController?.addJavaScriptHandler(
+              handlerName: 'googleSignOut',
+              callback: (args) async {
+                try { await _googleSignIn?.signOut(); return {'ok': true}; }
+                catch (e) { return {'error': e.toString()}; }
+              },
+            );
+          },
+          onConsoleMessage: (controller, msg) {
+            debugPrint('WebView Console: \u001b[33m${msg.message}\u001b[0m');
+          },
+          onLoadStart: (controller, url) async {
+            print('Page started loading: $url');
+          },
+          onLoadStop: (controller, url) async {
+            print('Page finished loading: $url');
+            await _injectPermissionOverrides();
+          },
+          onLoadError: (controller, url, code, message) {
+            print('Web resource error: $message');
+          },
+          shouldOverrideUrlLoading: (controller, navAction) async {
+            final url = navAction.request.url?.toString() ?? '';
+            debugPrint('NAV: $url');
+            if (url.contains('accounts.google.com') || url.contains('oauth2') || url.contains('gsi/client')) {
+              debugPrint('NAV-OAUTH: forcing same view');
+              return NavigationActionPolicy.ALLOW;
+            }
+            return NavigationActionPolicy.ALLOW;
+          },
+          onCreateWindow: (controller, createWindowAction) async {
+            final uri = createWindowAction.request.url;
+            final winId = createWindowAction.windowId;
+            debugPrint('POPUP (main): uri=$uri, windowId=$winId');
+            if (winId != null) {
+              await showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (ctx) {
+                  return Dialog(
+                    insetPadding: const EdgeInsets.all(0),
+                    child: SafeArea(
+                      child: InAppWebView(
+                        windowId: winId,
+                        initialSettings: InAppWebViewSettings(
+                          javaScriptEnabled: true,
+                          javaScriptCanOpenWindowsAutomatically: true,
+                          supportMultipleWindows: true,
+                          thirdPartyCookiesEnabled: true,
+                          domStorageEnabled: true,
+                          databaseEnabled: true,
+                          useHybridComposition: true,
+                        ),
+                        onCloseWindow: (popupController) {
+                          Navigator.of(ctx).pop();
+                        },
+                        onConsoleMessage: (c, m) => debugPrint('POPUP Console: ${m.message}'),
+                        onLoadStop: (c, u) => debugPrint('POPUP loadStop: $u'),
+                      ),
+                    ),
+                  );
+                },
+              );
+              return true;
+            }
+            if (uri != null) {
+              await controller.loadUrl(urlRequest: URLRequest(url: uri));
+              return true;
+            }
+            return false;
+          },
+          onPermissionRequest: (controller, request) async {
+            return PermissionResponse(resources: request.resources, action: PermissionResponseAction.GRANT);
+          },
+          androidOnPermissionRequest: (controller, origin, resources) async {
+            return PermissionRequestResponse(resources: resources, action: PermissionRequestResponseAction.GRANT);
+          },
+          onJsPrompt: (controller, jsPromptRequest) async {
+            // Bridge channel shim: window.Flutter.postMessage
+            if (jsPromptRequest.message == 'file_picker_request') {
+              await _handleFilePicker();
+              return JsPromptResponse(handledByClient: true, action: JsPromptResponseAction.CONFIRM, value: 'ok');
+            }
+            if (jsPromptRequest.message == 'window_open') {
+              final url = jsPromptRequest.defaultValue ?? '';
+              if (url.isNotEmpty) {
+                debugPrint('PROMPT window_open -> $url');
+                try { await controller.loadUrl(urlRequest: URLRequest(url: WebUri(url))); } catch (_) {}
+              }
+              return JsPromptResponse(handledByClient: true, action: JsPromptResponseAction.CONFIRM, value: 'ok');
+            }
+            return JsPromptResponse(handledByClient: false);
+          },
+        ),
       ),
+      floatingActionButton: kDebugMode ? FloatingActionButton.small(
+        onPressed: _setCustomUrlDialog,
+        child: const Icon(Icons.link),
+        tooltip: 'Set HTTPS URL',
+      ) : null,
     );
   }
 } 
