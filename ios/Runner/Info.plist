@@ -45,5 +45,26 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- Facebook iOS configuration -->
+	<key>FacebookAppID</key>
+	<string>683312195062841</string>
+	<key>FacebookDisplayName</key>
+	<string>skanuj_wygrywaj</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>fbapi</string>
+		<string>fbauth2</string>
+		<string>fb-messenger-share-api</string>
+		<string>fbshareextension</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fb683312195062841</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

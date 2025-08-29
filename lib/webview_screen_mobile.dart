@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'firebase_messaging_service.dart';
 import 'package:flutter/foundation.dart'; // for kDebugMode
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
 
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -20,57 +22,66 @@ class _WebViewScreenState extends State<WebViewScreen> {
   InAppWebViewController? _inAppController;
   bool _bridgeInjected = false;
   GoogleSignIn? _googleSignIn;
-  String? _customUrl; // persisted override for HTTPS tunnel
+  // String? _customUrl; // persisted override for HTTPS tunnel
+
+  static const MethodChannel _fbFallbackChannel = MethodChannel('fb_fallback');
 
   @override
   void initState() {
     super.initState();
-    _loadCustomUrl();
+    // _loadCustomUrl();
     final fcmToken = FirebaseMessagingService.fcmToken;
+
+    // Probe: confirm FB plugin is bound on this engine
+    FacebookAuth.instance.accessToken
+        .then((_) => debugPrint('FB plugin OK'))
+        .catchError((e) => debugPrint('FB plugin missing: ' + e.toString()));
     
     // The original controller setup is removed, but the JS bridge and file picker logic
     // are integrated into the InAppWebView's onJsPrompt handler.
     // The _injectPermissionOverrides method is also adapted to use _inAppController.
   }
 
-  Future<void> _loadCustomUrl() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      setState(() {
-        _customUrl = prefs.getString('custom_https_url');
-      });
-    } catch (_) {}
-  }
+  // Future<void> _loadCustomUrl() async {
+  //   try {
+  //     final prefs = await SharedPreferences.getInstance();
+  //     setState(() {
+  //       _customUrl = prefs.getString('custom_https_url');
+  //     });
+  //   } catch (_) {}
+  // }
 
-  Future<void> _setCustomUrlDialog() async {
-    final controller = TextEditingController(text: _customUrl ?? 'https://');
-    final url = await showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Set HTTPS URL'),
-          content: TextField(
-            controller: controller,
-            keyboardType: TextInputType.url,
-            decoration: const InputDecoration(hintText: 'https://<your-domain>'),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            TextButton(onPressed: () => Navigator.pop(ctx, controller.text.trim()), child: const Text('Save')),
-          ],
-        );
-      },
-    );
-    if (url != null && url.isNotEmpty && Uri.tryParse(url)?.hasAbsolutePath != false) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('custom_https_url', url);
-      setState(() { _customUrl = url; });
-      // reload webview to new URL
-      if (_inAppController != null) {
-        await _inAppController!.loadUrl(urlRequest: URLRequest(url: WebUri(url)));
-      }
-    }
-  }
+  // Future<void> _setCustomUrlDialog() async {
+  //   final controller = TextEditingController(text: _customUrl ?? 'https://');
+  //   final url = await showDialog<String>(
+  //     context: context,
+  //     builder: (ctx) {
+  //       return AlertDialog(
+  //         title: const Text('Set HTTPS URL'),
+  //         content: TextField(
+  //           controller: controller,
+  //           keyboardType: TextInputType.url,
+  //           decoration: const InputDecoration(hintText: 'https://<your-domain>'),
+  //         ),
+  //         actions: [
+  //           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+  //           TextButton(onPressed: () => Navigator.pop(ctx, controller.text.trim()), child: const Text('Save')),
+  //         ],
+  //       );
+  //     },
+  //   );
+  //   if (url != null && url.isNotEmpty && Uri.tryParse(url)?.hasScheme == true) {
+  //     try {
+  //       final prefs = await SharedPreferences.getInstance();
+  //       await prefs.setString('custom_https_url', url);
+  //     } catch (_) {}
+  //     if (!mounted) return;
+  //     setState(() { _customUrl = url; });
+  //     if (_inAppController != null) {
+  //       try { await _inAppController!.loadUrl(urlRequest: URLRequest(url: WebUri(url))); } catch (_) {}
+  //     }
+  //   }
+  // }
 
   Future<void> _injectPermissionOverrides() async {
     final fcmToken = FirebaseMessagingService.fcmToken;
@@ -665,9 +676,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final initialUrl = _customUrl?.isNotEmpty == true
-        ? _customUrl!
-        : 'https://skanuj-staging.web.app?company_name=kazimierz-club-new';
+    final initialUrl = 'https://skanuj-staging.web.app?company_name=kazimierz-club-new';
     return Scaffold(
       body: SafeArea(
         child: InAppWebView(
@@ -731,6 +740,91 @@ class _WebViewScreenState extends State<WebViewScreen> {
               serverClientId: '159120615271-80ftbidbjk2a75idsuuqu8tklbu9fugb.apps.googleusercontent.com',
               scopes: ['email', 'profile'],
             );
+            _inAppController?.addJavaScriptHandler(
+              handlerName: 'facebookLogin',
+              callback: (args) async {
+                try {
+                  try {
+                    await FacebookAuth.instance.logOut();
+                  } catch (e) {
+                    debugPrint('FB pre-logout ignored: ' + e.toString());
+                  }
+                  final res = await FacebookAuth.instance.login(permissions: ['email','public_profile']);
+                  if (res.status != LoginStatus.success || res.accessToken == null) {
+                    debugPrint('FB login failed: status=${res.status} message=${res.message}');
+                    await _inAppController?.evaluateJavascript(source: """
+                      try {
+                        console.log('Flutter FB login failed:', ${jsonEncode({'status': res.status.toString(), 'message': res.message ?? ''})});
+                        window.dispatchEvent(new CustomEvent('flutter_facebook_error', { detail: { status: '${res.status}', message: ${jsonEncode(res.message ?? '')} } }));
+                      } catch(e) { console.log('FB error dispatch failed', e); }
+                    """);
+                    return { 'error': res.status.toString(), 'message': res.message };
+                  }
+                  final atJson = res.accessToken!.toJson();
+                  final token = (atJson['token'] ?? atJson['tokenString'] ?? '').toString();
+                  final userId = (atJson['userId'] ?? atJson['userID'] ?? '').toString();
+                  int? expiresIn;
+                  try {
+                    final ex = atJson['expires'];
+                    if (ex is String) {
+                      final dt = DateTime.tryParse(ex);
+                      if (dt != null) { expiresIn = ((dt.millisecondsSinceEpoch - DateTime.now().millisecondsSinceEpoch) ~/ 1000); }
+                    } else if (ex is int) {
+                      expiresIn = ((ex - DateTime.now().millisecondsSinceEpoch) ~/ 1000);
+                    }
+                  } catch (_) {}
+                  await _inAppController?.evaluateJavascript(source: """
+                    try {
+                      window.dispatchEvent(new CustomEvent('flutter_facebook_tokens', { detail: { accessToken: '${token.replaceAll("'", "\\'")}', userId: '${userId.replaceAll("'", "\\'")}', expiresIn: ${expiresIn ?? 'null'} } }));
+                      if (window.onFlutterFacebookLogin) { try { window.onFlutterFacebookLogin({ accessToken: '${token.replaceAll("'", "\\'")}', userId: '${userId.replaceAll("'", "\\'")}', expiresIn: ${expiresIn ?? 'null'} }); } catch(e){} }
+                      console.log('Flutter -> Web FB token len', ${token.length});
+                    } catch(e) { console.log('FB tokens dispatch error', e); }
+                  """);
+                  return {'accessToken': token, 'userId': userId, 'expiresIn': expiresIn};
+                } catch (e) {
+                  debugPrint('FB login exception: ' + e.toString());
+                  // Fallback: try platform channel if plugin missing
+                  try {
+                    final result = await _fbFallbackChannel.invokeMethod<Map>('login');
+                    if (result != null && (result['accessToken'] ?? '').toString().isNotEmpty) {
+                      final token = (result['accessToken'] ?? '').toString();
+                      final userId = (result['userId'] ?? '').toString();
+                      final expiresIn = result['expiresIn'];
+                      await _inAppController?.evaluateJavascript(source: """
+                        try {
+                          window.dispatchEvent(new CustomEvent('flutter_facebook_tokens', { detail: { accessToken: '${token.replaceAll("'", "\\'")}', userId: '${userId.replaceAll("'", "\\'")}', expiresIn: ${expiresIn ?? 'null'} } }));
+                          console.log('Flutter FB fallback success');
+                        } catch(e) {}
+                      """);
+                      return {'accessToken': token, 'userId': userId, 'expiresIn': expiresIn};
+                    } else {
+                      final errMsg = result != null ? (result['error']?.toString() ?? 'unknown') : 'no_result';
+                      await _inAppController?.evaluateJavascript(source: """
+                        try {
+                          console.log('Flutter FB fallback raw:', ${jsonEncode(result)});
+                          window.dispatchEvent(new CustomEvent('flutter_facebook_error', { detail: { status: 'fallback_error', message: ${jsonEncode(errMsg)} } }));
+                        } catch(e) {}
+                      """);
+                      return { 'error': 'fallback_error', 'message': errMsg };
+                    }
+                  } catch (pe) {
+                    debugPrint('FB fallback channel error: ' + pe.toString());
+                    await _inAppController?.evaluateJavascript(source: """
+                      try {
+                        window.dispatchEvent(new CustomEvent('flutter_facebook_error', { detail: { status: 'fallback_exception', message: ${jsonEncode(pe.toString())} } }));
+                      } catch(e) {}
+                    """);
+                    return { 'error': 'fallback_exception', 'message': pe.toString() };
+                  }
+                }
+              },
+            );
+
+            _inAppController?.addJavaScriptHandler(
+              handlerName: 'facebookLogout',
+              callback: (args) async { try { await FacebookAuth.instance.logOut(); } catch(_){} return {'ok': true}; },
+            );
+
             _inAppController?.addJavaScriptHandler(
               handlerName: 'googleSignIn',
               callback: (args) async {
@@ -890,11 +984,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
           },
         ),
       ),
-      floatingActionButton: kDebugMode ? FloatingActionButton.small(
-        onPressed: _setCustomUrlDialog,
-        child: const Icon(Icons.link),
-        tooltip: 'Set HTTPS URL',
-      ) : null,
+      // floatingActionButton: kDebugMode ? FloatingActionButton.small(
+      //   onPressed: _setCustomUrlDialog,
+      //   child: const Icon(Icons.link),
+      //   tooltip: 'Set HTTPS URL',
+      // ) : null,
     );
   }
 } 
