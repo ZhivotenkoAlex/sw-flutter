@@ -26,12 +26,15 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   static const MethodChannel _fbFallbackChannel = MethodChannel('fb_fallback');
 
+  String? _pendingImageDataUrl; // pull-based bridge buffer
+  bool _isPicking = false; // prevent duplicate pickers
+
   @override
   void initState() {
     super.initState();
     // _loadCustomUrl();
     final fcmToken = FirebaseMessagingService.fcmToken;
-
+    
     // Probe: confirm FB plugin is bound on this engine
     FacebookAuth.instance.accessToken
         .then((_) => debugPrint('FB plugin OK'))
@@ -175,15 +178,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   try { window.prompt('window_open', String(a.href)); } catch(_) {}
                 }
               }, true);
-              console.log('✅ Same-window override installed via prompt bridge');
-             } catch(err) { console.log('⚠️ Failed to install Google same-window override', err); }
+             } catch(err) { console.error('⚠️ Failed to install Google same-window override', err); }
            })();
            
            // Override getUserMedia for camera/microphone access
            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
              const originalGetUserMedia = navigator.mediaDevices.getUserMedia;
              navigator.mediaDevices.getUserMedia = function(constraints) {
-               console.log('📷 getUserMedia called with constraints:', constraints);
                return originalGetUserMedia.call(this, constraints);
              };
            }
@@ -197,7 +198,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
             // Only proceed if click matches one of our target selectors
             const matchedSelector = TARGET_SELECTORS.find(sel => e.target.closest(sel));
             if (!matchedSelector) return;
-            console.log('🎯 Target file button matched:', matchedSelector);
             
             // From here on, we will drive the native picker
             e.preventDefault();
@@ -210,7 +210,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
             if (e.target.type === 'file') {
               fileInput = e.target;
               shouldIntercept = true;
-              console.log('📁 Direct file input clicked');
             }
             // Label pointing to file input
             else if (e.target.tagName === 'LABEL') {
@@ -219,7 +218,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 fileInput = document.getElementById(forAttr);
                 if (fileInput && fileInput.type === 'file') {
                   shouldIntercept = true;
-                  console.log('📁 Label for file input clicked');
                 }
               }
             }
@@ -233,7 +231,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
               
               if (fileInput) {
                 shouldIntercept = true;
-                console.log('📁 Element associated with file input clicked');
               }
             }
             // Check if clicked element contains text that suggests file upload
@@ -252,13 +249,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
               e.target.textContent.toLowerCase().includes('zdjęcie') || // Polish for photo
               e.target.textContent.toLowerCase().includes('prześlij') || // Polish for upload
               e.target.textContent.toLowerCase().includes('wybierz') || // Polish for choose
-              e.target.textContent.toLowerCase().includes('dodaj') // Polish for add
+              e.target.textContent.toLowerCase().includes('dodaj') ||
+              e.target.textContent.toLowerCase().includes('galeria') ||
+              e.target.textContent.toLowerCase().includes('make photo')
             )) {
               // Look for nearby file input
               fileInput = document.querySelector('input[type="file"]');
               if (fileInput) {
                 shouldIntercept = true;
-                console.log('📁 Upload-related element clicked, found file input');
               }
             }
             // Check for Vue.js/React components that might be file upload buttons
@@ -272,7 +270,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
                          e.target.closest('*').querySelector('input[type="file"]');
               if (fileInput) {
                 shouldIntercept = true;
-                console.log('📁 Component with file-related classes clicked');
               }
             }
             
@@ -283,7 +280,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
               if (candidate) {
                 fileInput = candidate;
                 shouldIntercept = true;
-                console.log('🧭 Using existing file input found on page');
               } else {
                 // Create a virtual input attached to the closest form/container
                 const clickTarget = e.target;
@@ -297,12 +293,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 host.appendChild(virtualInput);
                 fileInput = virtualInput;
                 shouldIntercept = true;
-                console.log('🧪 Created virtual file input for targeted button');
               }
             }
             
             if (shouldIntercept && fileInput) {
-              console.log('📁 Intercepting file input interaction');
               e.preventDefault();
               e.stopPropagation();
               
@@ -310,10 +304,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
               window.currentFileInput = fileInput;
               
               if (window.Flutter && window.Flutter.postMessage) {
-                console.log('📱 Sending file_picker_request to Flutter');
                 window.Flutter.postMessage('file_picker_request');
               } else {
-                console.log('❌ Flutter bridge not available');
+                console.error('❌ Flutter bridge not available');
               }
               return false;
             }
@@ -330,21 +323,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
             
             // Only log if counts changed (new elements loaded)
             if (fileInputs.length !== lastFileInputCount || allButtons.length !== lastButtonCount) {
-              console.log('🔄 DOM CHANGED - Rescanning for new elements...');
-              console.log('📁 Found', fileInputs.length, 'file inputs on page');
-              
-              fileInputs.forEach(function(input, index) {
-                if (index >= lastFileInputCount) { // Only log new ones
-                  console.log('📁 NEW File input', index + 1, ':', {
-                    id: input.id,
-                    name: input.name,
-                    accept: input.accept,
-                    multiple: input.multiple,
-                    hidden: input.style.display === 'none' || input.hidden,
-                    className: input.className
-                  });
-                }
-              });
               
               // Log potential upload buttons
               let potentialUploadButtons = [];
@@ -357,6 +335,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     text.includes('camera') || text.includes('gallery') || text.includes('browse') ||
                     text.includes('zdjęcie') || text.includes('prześlij') || text.includes('wybierz') ||
                     text.includes('scan') || text.includes('dodaj') ||
+                    text.includes('galeria') || text.includes('make photo') ||
                     className.includes('upload') || className.includes('file') || className.includes('photo')) {
                   potentialUploadButtons.push({
                     tagName: btn.tagName,
@@ -367,16 +346,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 }
               });
               
-              if (potentialUploadButtons.length > 0) {
-                console.log('🎯 Found', potentialUploadButtons.length, 'potential upload buttons:');
-                potentialUploadButtons.forEach(function(btn, index) {
-                  console.log('🎯 Button', index + 1, ':', btn);
-                });
-              }
-              
               lastFileInputCount = fileInputs.length;
               lastButtonCount = allButtons.length;
-              console.log('✅ Scan completed - Monitoring for Module Federation changes...');
             }
           }
           
@@ -408,7 +379,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
             });
             
             if (shouldRescan) {
-              console.log('🔄 MutationObserver detected new elements - rescanning...');
               setTimeout(scanForDynamicElements, 500);
             }
           });
@@ -418,12 +388,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
             subtree: true
           });
           
-          console.log('✅ Module Federation monitoring active - watching for dynamic content');
-          
           // Also handle focus events on file inputs
           document.addEventListener('focus', function(e) {
             if (e.target.type === 'file') {
-              console.log('📁 File input focused, using Flutter bridge');
               e.preventDefault();
               window.currentFileInput = e.target;
               if (window.Flutter && window.Flutter.postMessage) {
@@ -517,11 +484,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
             detail: { token: '$fcmToken' }
           }));
           
-          console.log('🎉 ULTIMATE Firebase bridge injection completed');
-          console.log('🔥 FCM Token available:', '$fcmToken');
-          console.log('📱 Notification permissions FAKED and LOCKED');
-          console.log('⚙️ Service worker should work with fake permissions');
-          
           return 'Ultimate Firebase bridge injected successfully';
         })();
       ''');
@@ -544,130 +506,135 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   Future<void> _handleFilePicker() async {
     try {
+      debugPrint('FPK: _handleFilePicker() start');
       final ImagePicker picker = ImagePicker();
       
       // Show options: Camera or Gallery
       final result = await showDialog<String>(
         context: context,
         builder: (BuildContext context) {
+          final isPl = Localizations.localeOf(context).languageCode.toLowerCase().startsWith('pl');
+          final tTitle = isPl ? 'Wybierz obraz' : 'Select Image';
+          final tSubtitle = isPl ? 'Wybierz opcję:' : 'Choose an option:';
+          final tCamera = isPl ? 'Aparat' : 'Camera';
+          final tGallery = isPl ? 'Galeria' : 'Gallery';
+          final tCancel = isPl ? 'Anuluj' : 'Cancel';
           return AlertDialog(
-            title: const Text('Select Image'),
-            content: const Text('Choose an option:'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop('camera'),
-                child: const Text('Camera'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop('gallery'),
-                child: const Text('Gallery'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-            ],
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: Text(tTitle, textAlign: TextAlign.center),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(tSubtitle, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => Navigator.of(context).pop('camera'),
+                        icon: const Icon(Icons.photo_camera_outlined),
+                        label: Text(tCamera),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => Navigator.of(context).pop('gallery'),
+                        icon: const Icon(Icons.photo_library_outlined),
+                        label: Text(tGallery),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Center(
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      foregroundColor: Theme.of(context).colorScheme.secondary,
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(tCancel),
+                  ),
+                ),
+              ],
+            ),
           );
         },
       );
+      debugPrint('FPK: dialog result => ' + (result?.toString() ?? 'null'));
 
       if (result != null) {
         final XFile? image;
         if (result == 'camera') {
-          image = await picker.pickImage(source: ImageSource.camera);
+          debugPrint('FPK: launching camera');
+          image = await picker.pickImage(source: ImageSource.camera, imageQuality: 70, maxWidth: 1600, maxHeight: 1600);
         } else {
-          image = await picker.pickImage(source: ImageSource.gallery);
+          debugPrint('FPK: opening gallery');
+          image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 1600, maxHeight: 1600);
         }
+        debugPrint('FPK: picker returned => ' + (image?.name ?? 'null'));
 
         if (image != null) {
           // Convert image to base64 and send back to web app
           final bytes = await image.readAsBytes();
-          final base64Image = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-          
-          // Send the image data back to the web app
-          await _inAppController?.evaluateJavascript(source: '''
-            if (window.currentFileInput) {
-              console.log('📁 Processing selected image for file input');
-              
-              // Convert base64 to blob
-              const base64Data = '$base64Image'.split(',')[1];
-              const byteCharacters = atob(base64Data);
-              const byteNumbers = new Array(byteCharacters.length);
-              for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-              }
-              const byteArray = new Uint8Array(byteNumbers);
-              const blob = new Blob([byteArray], { type: 'image/jpeg' });
-              
-              // Create a File object
-              const file = new File([blob], '${image.name}', { type: 'image/jpeg' });
-              
-              // Create a FileList-like object
-              const dataTransfer = new DataTransfer();
-              dataTransfer.items.add(file);
-              
-              try {
-                // Set the files property of the input
-                window.currentFileInput.files = dataTransfer.files;
-              } catch (err) {
-                console.log('⚠️ Setting input.files failed (likely read-only):', err);
-              }
-              
-              // Trigger change event
-              const changeEvent = new Event('change', { bubbles: true, composed: true });
-              window.currentFileInput.dispatchEvent(changeEvent);
-              
-              // Also trigger input event for some frameworks
-              const inputEvent = new Event('input', { bubbles: true, composed: true });
-              window.currentFileInput.dispatchEvent(inputEvent);
-              
-              // Fallback: dispatch a drag-drop style event many libs listen to
-              try {
-                const dropEvent = new DragEvent('drop', { bubbles: true, composed: true, dataTransfer: dataTransfer });
-                window.currentFileInput.dispatchEvent(dropEvent);
-                const container = window.currentFileInput.closest('form') || window.currentFileInput.parentElement;
-                if (container) container.dispatchEvent(dropEvent);
-              } catch (err) {
-                console.log('⚠️ Creating DragEvent failed:', err);
-              }
-              
-              // Inform host and federated module listeners
-              try {
-                // 1) Global event with full data URL for Vue listener
-                window.dispatchEvent(new CustomEvent('flutter_file_selected', {
-                  detail: { fileName: '${image.name}', fileData: '$base64Image' }
-                }));
+          final base64Payload = base64Encode(bytes);
+          debugPrint('FPK: bytes=' + bytes.length.toString() + ' base64Len=' + base64Payload.length.toString());
 
-                // 2) Element-scoped event as well (if needed)
-                const targetBtn = document.querySelector('[data-flutter-file-input="1"]');
-                if (targetBtn) {
-                  targetBtn.dispatchEvent(new CustomEvent('flutter_file_selected', {
-                    detail: { fileName: '${image.name}', fileData: '$base64Image' },
-                    bubbles: true
-                  }));
-                }
+          // Extra diagnostics: current page URL and bridge state
+          try {
+            final currentUrl = await _inAppController?.getUrl();
+            debugPrint('FPK: page url=' + (currentUrl?.toString() ?? 'null'));
+          } catch (e) { debugPrint('FPK: getUrl error: ' + e.toString()); }
+          try {
+            final probe = await _inAppController?.evaluateJavascript(source: '''(function(){try{return JSON.stringify({
+              href: location.href,
+              vis: document.visibilityState,
+              ready: document.readyState,
+              hasPoller: !!window.__flutterImagePollerInstalled,
+              hasDispatch: (typeof __dispatchFlutterImage),
+              handlers: (window.__flutterFileSelectedHandlers||0),
+              hasOnResult: (typeof window.onFlutterScanResult),
+              hasHostApp: (typeof window.HostApp),
+              hasFlutterPostMessage: !!(window.Flutter && window.Flutter.postMessage)
+            });}catch(e){return 'ERR:'+e;}})()''');
+            debugPrint('FPK: page probe => ' + (probe?.toString() ?? 'null'));
+          } catch (e) { debugPrint('FPK: page probe error: ' + e.toString()); }
 
-                // 3) Direct global handler hook if module exposes it
-                if (typeof window.appUploadOrScanHandler === 'function') {
-                  window.appUploadOrScanHandler([file]);
-                } else {
-                  // 4) Queue for when module mounts
-                  window.__pendingFlutterFile = file;
-                  window.__pendingFlutterDataUrl = '$base64Image';
-                }
-              } catch (err) {
-                console.log('⚠️ Dispatch to app failed:', err);
-              }
+          const mime = 'image/jpeg';
+          final dataUrl = 'data:$mime;base64,' + base64Payload;
+          debugPrint('FPK: dataUrl length=' + dataUrl.length.toString());
+          _pendingImageDataUrl = null; // do not cache for poller; avoid reuse
 
-              console.log('📁 Image dispatched to page events:', '${image.name}');
-              
-              // Clear the reference
-              window.currentFileInput = null;
-            } else {
-              console.log('❌ No file input reference found');
-            }
-          ''');
+          // Longer wait to ensure WebView fully resumes after picker
+          await Future.delayed(const Duration(milliseconds: 1600));
+
+          // Log controller state and attempt resilient dispatch via JS function with retries
+          debugPrint('FPK: controller is ' + (_inAppController == null ? 'null' : 'ready'));
+          // Single dispatch only; no retries
+          try {
+            final js = "try { console.log('🟢 CALL __dispatchFlutterImage'); (typeof __dispatchFlutterImage==='function') && __dispatchFlutterImage(${jsonEncode(dataUrl)}, ${jsonEncode(image.name)}); 'ok'; } catch(e) { console.log('⚠️ __dispatchFlutterImage call error', e); 'err'; }";
+            final res = await _inAppController?.evaluateJavascript(source: js);
+            debugPrint('FPK: __dispatchFlutterImage res=' + (res?.toString() ?? 'null'));
+            try { await _inAppController?.evaluateJavascript(source: "try { window.__lastFlutterImage = undefined; } catch(e){}"); } catch (_) {}
+          } catch (e) {
+            debugPrint('FPK: __dispatchFlutterImage eval error: ' + e.toString());
+          }
+
+          // Give WebView a bit more time after dispatch attempts
+          await Future.delayed(const Duration(milliseconds: 600));
+          try {
+            await _inAppController?.evaluateJavascript(source: "try { console.log('DBG visibility=', document.visibilityState, 'handlers=', (window.__flutterFileSelectedHandlers||0)); } catch(e) { console.log('DBG tracker missing', e); }");
+          } catch (_) {}
+
+          // Done
+          debugPrint('FPK: dispatch finished');
+        } else {
+          debugPrint('FPK: picker returned null');
         }
+      } else {
+        debugPrint('FPK: dialog cancelled');
       }
     } catch (e) {
       print('Error handling file picker: $e');
@@ -727,8 +694,145 @@ class _WebViewScreenState extends State<WebViewScreen> {
                         try { f.setAttribute('target','_self'); } catch(_) {}
                       }
                     }, true);
-                    console.log('✅ Pre-injected popup bridge installed at document-start');
-                  } catch(err) { console.log('⚠️ Pre-inject failed', err); }
+                  } catch(err) { console.error('⚠️ Pre-inject failed', err); }
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+            ),
+            UserScript(
+              source: '''
+                (function(){
+                  try {
+                    // Track listeners for debugging
+                    if (!window.__flutterListenerTrackerInstalled) {
+                      window.__flutterListenerTrackerInstalled = true;
+                      window.__flutterFileSelectedHandlers = 0;
+                      window.__lastDispatchToken = null;
+                      window.__lastDispatchTime = 0;
+                      var ET = window.EventTarget && window.EventTarget.prototype;
+                      if (ET && ET.addEventListener) {
+                        var _origAdd = ET.addEventListener;
+                        ET.addEventListener = function(type, listener, options){
+                          try { if (String(type) === 'flutter_file_selected') { window.__flutterFileSelectedHandlers = (window.__flutterFileSelectedHandlers||0) + 1;} } catch(_) {}
+                          return _origAdd.apply(this, arguments);
+                        };
+                      }
+                    }
+                  } catch(e) { console.error('⚠️ Listener tracker error', e); }
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+            ),
+            UserScript(
+              source: '''
+                (function(){
+                  try {
+                    // Shim for Flutter bridge using prompt
+                    if (!window.Flutter) window.Flutter = {};
+                    if (typeof window.Flutter.postMessage !== 'function') {
+                      window.Flutter.postMessage = function(message) {
+                        try { return window.prompt(String(message || ''), ''); } catch (e) { return null; }
+                      };
+                      console.log('✅ Flutter.postMessage shim installed');
+                    }
+                    // Provide HostApp/FlutterHost compatible bridge expected by the web app
+                    var hostObj = {
+                      postMessage: function(payload) {
+                        try {
+                          var msg = payload;
+                          if (typeof payload === 'string') { try { msg = JSON.parse(payload); } catch(_) {} }
+                          console.log('🎯 HostApp.postMessage received:', msg);
+                          if (msg && (msg.type === 'chooseImage' || msg.type === 'choosePhoto')) {
+                            try { window.prompt('file_picker_request', ''); } catch(_) {}
+                            return 'ok';
+                          }
+                        } catch(err) { console.log('⚠️ HostApp.postMessage error', err); }
+                        return null;
+                      }
+                    };
+                    if (!window.HostApp) window.HostApp = hostObj;
+                    if (!window.FlutterHost) window.FlutterHost = hostObj;
+                    console.log('✅ HostApp/FlutterHost shim installed');
+                  } catch (e) { console.log('⚠️ postMessage shim error', e); }
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+            ),
+            UserScript(
+              source: '''
+                (function(){
+                  try {
+                    // Intercept file input programmatic/native openings
+                    var HTMLInputProto = window.HTMLInputElement && window.HTMLInputElement.prototype;
+                    if (HTMLInputProto) {
+                      var __origClick = HTMLInputProto.click;
+                      if (typeof __origClick === 'function') {
+                        HTMLInputProto.click = function() {
+                          try {
+                            if (this && String(this.type).toLowerCase() === 'file') {
+                              window.currentFileInput = this;
+                              try { window.Flutter && window.Flutter.postMessage && window.Flutter.postMessage('file_picker_request'); } catch(_) {}
+                              return; // swallow native chooser
+                            }
+                          } catch(_) {}
+                          return __origClick.apply(this, arguments);
+                        };
+                      }
+                      var __origShowPicker = HTMLInputProto.showPicker;
+                      if (typeof __origShowPicker === 'function') {
+                        HTMLInputProto.showPicker = function() {
+                          try {
+                            if (this && String(this.type).toLowerCase() === 'file') {
+                              window.currentFileInput = this;
+                              try { window.Flutter && window.Flutter.postMessage && window.Flutter.postMessage('file_picker_request'); } catch(_) {}
+                              return; // swallow native chooser
+                            }
+                          } catch(_) {}
+                          return __origShowPicker.apply(this, arguments);
+                        };
+                      }
+                    }
+                    // Capture label clicks that target file inputs
+                    document.addEventListener('click', function(e){
+                      try {
+                        var label = e.target && e.target.closest ? e.target.closest('label[for], label') : null;
+                        if (label) {
+                          var forAttr = label.getAttribute('for');
+                          var inp = forAttr ? document.getElementById(forAttr) : (label.querySelector && label.querySelector('input[type="file"]'));
+                          if (inp && String(inp.type).toLowerCase() === 'file') {
+                            e.preventDefault(); e.stopPropagation();
+                            window.currentFileInput = inp;
+                            try { window.Flutter && window.Flutter.postMessage && window.Flutter.postMessage('file_picker_request'); } catch(_) {}
+                          }
+                        }
+                      } catch(_) {}
+                    }, true);
+                  } catch (e) { console.error('⚠️ file input intercept failed', e); }
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+            ),
+            UserScript(
+              source: '''
+                (function(){
+                  try {
+                    if (!window.__dispatchFlutterImage) {
+                      window.__dispatchFlutterImage = function(dataUrl, fileName) {
+                        try {
+                          var detail = { fileName: String(fileName || 'photo.jpg'), fileData: String(dataUrl || '') };
+                          var now = Date.now();
+                          window.__lastDispatchTime = now;
+                          window.__lastFlutterImage = detail;
+                          // Single dispatch path only
+                          try { window.dispatchEvent(new CustomEvent('flutter_file_selected', { detail: detail, bubbles: true, composed: true })); } catch(e){}
+                          return true;
+                        } catch (e) {
+                          console.error('⚠️ __dispatchFlutterImage error', e);
+                          return false;
+                        }
+                      };
+                    }
+                  } catch(e) { console.error('⚠️ install __dispatchFlutterImage failed', e); }
                 })();
               ''',
               injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
@@ -754,9 +858,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     debugPrint('FB login failed: status=${res.status} message=${res.message}');
                     await _inAppController?.evaluateJavascript(source: """
                       try {
-                        console.log('Flutter FB login failed:', ${jsonEncode({'status': res.status.toString(), 'message': res.message ?? ''})});
                         window.dispatchEvent(new CustomEvent('flutter_facebook_error', { detail: { status: '${res.status}', message: ${jsonEncode(res.message ?? '')} } }));
-                      } catch(e) { console.log('FB error dispatch failed', e); }
+                      } catch(e) { console.error('FB error dispatch failed', e); }
                     """);
                     return { 'error': res.status.toString(), 'message': res.message };
                   }
@@ -777,8 +880,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     try {
                       window.dispatchEvent(new CustomEvent('flutter_facebook_tokens', { detail: { accessToken: '${token.replaceAll("'", "\\'")}', userId: '${userId.replaceAll("'", "\\'")}', expiresIn: ${expiresIn ?? 'null'} } }));
                       if (window.onFlutterFacebookLogin) { try { window.onFlutterFacebookLogin({ accessToken: '${token.replaceAll("'", "\\'")}', userId: '${userId.replaceAll("'", "\\'")}', expiresIn: ${expiresIn ?? 'null'} }); } catch(e){} }
-                      console.log('Flutter -> Web FB token len', ${token.length});
-                    } catch(e) { console.log('FB tokens dispatch error', e); }
+                    } catch(e) { console.error('FB tokens dispatch error', e); }
                   """);
                   return {'accessToken': token, 'userId': userId, 'expiresIn': expiresIn};
                 } catch (e) {
@@ -793,7 +895,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       await _inAppController?.evaluateJavascript(source: """
                         try {
                           window.dispatchEvent(new CustomEvent('flutter_facebook_tokens', { detail: { accessToken: '${token.replaceAll("'", "\\'")}', userId: '${userId.replaceAll("'", "\\'")}', expiresIn: ${expiresIn ?? 'null'} } }));
-                          console.log('Flutter FB fallback success');
                         } catch(e) {}
                       """);
                       return {'accessToken': token, 'userId': userId, 'expiresIn': expiresIn};
@@ -801,7 +902,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       final errMsg = result != null ? (result['error']?.toString() ?? 'unknown') : 'no_result';
                       await _inAppController?.evaluateJavascript(source: """
                         try {
-                          console.log('Flutter FB fallback raw:', ${jsonEncode(result)});
                           window.dispatchEvent(new CustomEvent('flutter_facebook_error', { detail: { status: 'fallback_error', message: ${jsonEncode(errMsg)} } }));
                         } catch(e) {}
                       """);
@@ -832,14 +932,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   debugPrint('GoogleSignIn: idToken len=${idToken.length}, accessToken len=${accessToken.length}, serverAuthCode len=${serverAuthCode.length}, email=$email, fallback=$fallback');
                   await _inAppController?.evaluateJavascript(source: """
                     try {
-                      console.log('Flutter -> Web tokens', { idTokenLen: ${idToken.length}, accessTokenLen: ${accessToken.length}, serverAuthCodeLen: ${serverAuthCode.length}, email: '${email.replaceAll("'", "\\'")}', fallback: ${fallback ? 'true' : 'false'} });
                       window.dispatchEvent(new CustomEvent('flutter_google_tokens', {
                         detail: { idToken: '${idToken.replaceAll("'", "\\'")}', accessToken: '${accessToken.replaceAll("'", "\\'")}', serverAuthCode: '${serverAuthCode.replaceAll("'", "\\'")}', email: '${email.replaceAll("'", "\\'")}', fallback: ${fallback ? 'true' : 'false'} }
                       }));
                       if (window.onFlutterGoogleSignIn) {
-                        try { window.onFlutterGoogleSignIn({ idToken: '${idToken.replaceAll("'", "\\'")}', accessToken: '${accessToken.replaceAll("'", "\\'")}', serverAuthCode: '${serverAuthCode.replaceAll("'", "\\'")}', email: '${email.replaceAll("'", "\\'")}', fallback: ${fallback ? 'true' : 'false'} }); } catch(e) { console.log('onFlutterGoogleSignIn error', e); }
+                        try { window.onFlutterGoogleSignIn({ idToken: '${idToken.replaceAll("'", "\\'")}', accessToken: '${accessToken.replaceAll("'", "\\'")}', serverAuthCode: '${serverAuthCode.replaceAll("'", "\\'")}', email: '${email.replaceAll("'", "\\'")}', fallback: ${fallback ? 'true' : 'false'} }); } catch(e) { console.error('onFlutterGoogleSignIn error', e); }
                       }
-                    } catch (e) { console.log('Flutter -> Web tokens dispatch error', e); }
+                    } catch (e) { console.error('Flutter -> Web tokens dispatch error', e); }
                   """);
                   return {
                     'idToken': idToken,
@@ -969,7 +1068,26 @@ class _WebViewScreenState extends State<WebViewScreen> {
           onJsPrompt: (controller, jsPromptRequest) async {
             // Bridge channel shim: window.Flutter.postMessage
             if (jsPromptRequest.message == 'file_picker_request') {
-              await _handleFilePicker();
+              debugPrint('PROMPT file_picker_request received');
+              // Defer picker to avoid evaluating JS while window.prompt is blocking the JS thread
+              Future.microtask(() async {
+                try {
+                  if (_isPicking) {
+                    debugPrint('FPK: duplicate picker request ignored (inflight)');
+                    return;
+                  }
+                  _isPicking = true;
+                  try {
+                    await _inAppController?.evaluateJavascript(source: "try { window.__lastFlutterImage = undefined; window.__pendingFlutterFile = undefined; window.__pendingFlutterDataUrl = undefined; } catch(e){}");
+                  } catch (_) {}
+                  debugPrint('FPK: deferred picker start');
+                  await _handleFilePicker();
+                } catch (e) {
+                  debugPrint('FPK: deferred picker error: ' + e.toString());
+                } finally {
+                  _isPicking = false;
+                }
+              });
               return JsPromptResponse(handledByClient: true, action: JsPromptResponseAction.CONFIRM, value: 'ok');
             }
             if (jsPromptRequest.message == 'window_open') {
