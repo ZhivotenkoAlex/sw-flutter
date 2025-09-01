@@ -45,6 +45,24 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!--Google auth-->
+	<key>GIDClientID</key>
+	<string>159120615271-9bm2apos0nn46hk1n56vlm611raqc1fb.apps.googleusercontent.com</string>
+	<key>CFBundleURLTypes</key>
+<array>
+  <dict>
+    <key>CFBundleURLSchemes</key>
+    <array>
+      <string>fb683312195062841</string>
+    </array>
+  </dict>
+  <dict>
+    <key>CFBundleURLSchemes</key>
+    <array>
+      <string>com.googleusercontent.apps.159120615271-9bm2apos0nn46hk1n56vlm611raqc1fb</string>
+    </array>
+  </dict>
+</array>
 	<!-- Facebook iOS configuration -->
 	<key>FacebookAppID</key>
 	<string>683312195062841</string>
@@ -57,14 +75,14 @@
 		<string>fb-messenger-share-api</string>
 		<string>fbshareextension</string>
 	</array>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>fb683312195062841</string>
-			</array>
-		</dict>
-	</array>
+	<key>FacebookClientToken</key>
+	<string>287981d5a80b70d2d89de443c84a8fe8</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Camera access is needed to scan codes and take photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photo library access is needed to pick images.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Microphone access is needed for video capture.</string>
+
 </dict>
 </plist>
