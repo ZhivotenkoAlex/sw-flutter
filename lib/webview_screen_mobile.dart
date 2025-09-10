@@ -35,11 +35,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
     // _loadCustomUrl();
     final fcmToken = FirebaseMessagingService.fcmToken;
     
-    // Probe: confirm FB plugin is bound on this engine
-    FacebookAuth.instance.accessToken
-        .then((_) => debugPrint('FB plugin OK'))
-        .catchError((e) => debugPrint('FB plugin missing: ' + e.toString()));
-    
     // The original controller setup is removed, but the JS bridge and file picker logic
     // are integrated into the InAppWebView's onJsPrompt handler.
     // The _injectPermissionOverrides method is also adapted to use _inAppController.
@@ -88,7 +83,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   Future<void> _injectPermissionOverrides() async {
     final fcmToken = FirebaseMessagingService.fcmToken;
-    print('Injecting ULTIMATE permission overrides with token: $fcmToken');
+    
     
     try {
       await _inAppController?.evaluateJavascript(source: '''
@@ -488,19 +483,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
         })();
       ''');
       
-      // Mark on Dart side for diagnostics only; JS side prevents duplicates
+      // Mark on Dart side; JS side prevents duplicates
       _bridgeInjected = true;
-      print('✅ ULTIMATE permission overrides injection completed');
       
-    } catch (e) {
-      print('❌ Error injecting ULTIMATE permission overrides: $e');
-    }
+    } catch (e) {}
   }
 
-  void _handleFirebaseMessage(String message) {
-    // Handle messages from web app to Flutter
-    print('Handling Firebase message from web: $message');
-  }
+  void _handleFirebaseMessage(String message) {}
 
 
 
@@ -636,9 +625,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
       } else {
         debugPrint('FPK: dialog cancelled');
       }
-    } catch (e) {
-      print('Error handling file picker: $e');
-    }
+    } catch (e) {}
   }
 
   @override
@@ -660,9 +647,54 @@ class _WebViewScreenState extends State<WebViewScreen> {
             useHybridComposition: true,
             domStorageEnabled: true,
             databaseEnabled: true,
-            userAgent: 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36',
+            userAgent: 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36 SkanujWygrywaj/Flutter',
           ),
           initialUserScripts: UnmodifiableListView<UserScript>([
+            // Soft-disable web push errors by stubbing unsupported APIs early
+            UserScript(
+              source: '''
+                (function(){
+                  try {
+                    // Mark host
+                    window.__inFlutterHost = true;
+                    // Stub Notification to avoid permission errors
+                    try {
+                      if (!('Notification' in window) || typeof Notification.requestPermission !== 'function') {
+                        var FakeNotification = function(){}; 
+                        FakeNotification.permission = 'granted';
+                        FakeNotification.requestPermission = function(){ return Promise.resolve('granted'); };
+                        Object.defineProperty(window, 'Notification', { value: FakeNotification, configurable: true });
+                      }
+                    } catch(_){ }
+                    // Minimal service worker facade so code that probes it does not explode
+                    try {
+                      if (!('serviceWorker' in navigator)) {
+                        Object.defineProperty(navigator, 'serviceWorker', { value: {
+                          addEventListener: function(){},
+                          getRegistrations: function(){ return Promise.resolve([]); },
+                          register: function(){ return Promise.reject(new Error('unsupported')); }
+                        }, configurable: true });
+                      }
+                    } catch(_){ }
+                  } catch(_){ }
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+            ),
+            UserScript(
+              source: '''
+                (function(){
+                  try {
+                    // Lightweight, reliable host marker for the web app
+                    if (!window.__inFlutterHost) {
+                      window.__inFlutterHost = true;
+                      try { window.dispatchEvent(new CustomEvent('flutterHostDetected')); } catch(_){}
+                    }
+                  } catch(_){ }
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+            ),
             UserScript(
               source: '''
                 (function(){
@@ -995,25 +1027,49 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 catch (e) { return {'error': e.toString()}; }
               },
             );
+
+            // Push registration from web app
+            _inAppController?.addJavaScriptHandler(
+              handlerName: 'registerPush',
+              callback: (args) async {
+                try {
+                  final uid = (args.isNotEmpty ? args[0] : '')?.toString() ?? '';
+                  final company = args.length > 1 ? args[1]?.toString() : null;
+                  debugPrint('registerPush called from WebView: uid=' + uid + ' company=' + (company ?? '-'));
+                  debugPrint('Current FCM token: ' + (FirebaseMessagingService.fcmToken ?? 'null'));
+                  if (uid.isEmpty) return {'error': 'no_user'};
+                  await FirebaseMessagingService.registerToken(userId: uid, company: company);
+                  debugPrint('registerPush finished for uid=' + uid);
+                  return {'ok': true, 'token': FirebaseMessagingService.fcmToken};
+                } catch (e) {
+                  debugPrint('registerPush error: ' + e.toString());
+                  return {'error': e.toString()};
+                }
+              },
+            );
+
+            _inAppController?.addJavaScriptHandler(
+              handlerName: 'logoutPush',
+              callback: (args) async {
+                try {
+                  final uid = (args.isNotEmpty ? args[0] : '')?.toString() ?? '';
+                  debugPrint('logoutPush called from WebView: uid=' + uid);
+                  if (uid.isEmpty) return {'error': 'no_user'};
+                  await FirebaseMessagingService.unregisterToken(userId: uid);
+                  debugPrint('logoutPush finished for uid=' + uid);
+                  return {'ok': true};
+                } catch (e) { return {'error': e.toString()}; }
+              },
+            );
           },
-          onConsoleMessage: (controller, msg) {
-            debugPrint('WebView Console: \u001b[33m${msg.message}\u001b[0m');
-          },
-          onLoadStart: (controller, url) async {
-            print('Page started loading: $url');
-          },
-          onLoadStop: (controller, url) async {
-            print('Page finished loading: $url');
-            await _injectPermissionOverrides();
-          },
-          onLoadError: (controller, url, code, message) {
-            print('Web resource error: $message');
-          },
+          onConsoleMessage: (controller, msg) {},
+          onLoadStart: (controller, url) async {},
+          onLoadStop: (controller, url) async { await _injectPermissionOverrides(); },
+          onLoadError: (controller, url, code, message) {},
           shouldOverrideUrlLoading: (controller, navAction) async {
             final url = navAction.request.url?.toString() ?? '';
-            debugPrint('NAV: $url');
             if (url.contains('accounts.google.com') || url.contains('oauth2') || url.contains('gsi/client')) {
-              debugPrint('NAV-OAUTH: forcing same view');
+              
               return NavigationActionPolicy.ALLOW;
             }
             return NavigationActionPolicy.ALLOW;
@@ -1021,7 +1077,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
           onCreateWindow: (controller, createWindowAction) async {
             final uri = createWindowAction.request.url;
             final winId = createWindowAction.windowId;
-            debugPrint('POPUP (main): uri=$uri, windowId=$winId');
             if (winId != null) {
               await showDialog(
                 context: context,
@@ -1044,8 +1099,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
                         onCloseWindow: (popupController) {
                           Navigator.of(ctx).pop();
                         },
-                        onConsoleMessage: (c, m) => debugPrint('POPUP Console: ${m.message}'),
-                        onLoadStop: (c, u) => debugPrint('POPUP loadStop: $u'),
+                        onConsoleMessage: (c, m) {},
+                        onLoadStop: (c, u) {},
                       ),
                     ),
                   );
@@ -1068,23 +1123,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
           onJsPrompt: (controller, jsPromptRequest) async {
             // Bridge channel shim: window.Flutter.postMessage
             if (jsPromptRequest.message == 'file_picker_request') {
-              debugPrint('PROMPT file_picker_request received');
               // Defer picker to avoid evaluating JS while window.prompt is blocking the JS thread
               Future.microtask(() async {
                 try {
-                  if (_isPicking) {
-                    debugPrint('FPK: duplicate picker request ignored (inflight)');
-                    return;
-                  }
+                  if (_isPicking) { return; }
                   _isPicking = true;
-                  try {
-                    await _inAppController?.evaluateJavascript(source: "try { window.__lastFlutterImage = undefined; window.__pendingFlutterFile = undefined; window.__pendingFlutterDataUrl = undefined; } catch(e){}");
-                  } catch (_) {}
-                  debugPrint('FPK: deferred picker start');
+                  try { await _inAppController?.evaluateJavascript(source: "try { window.__lastFlutterImage = undefined; window.__pendingFlutterFile = undefined; window.__pendingFlutterDataUrl = undefined; } catch(e){}"); } catch (_) {}
                   await _handleFilePicker();
-                } catch (e) {
-                  debugPrint('FPK: deferred picker error: ' + e.toString());
-                } finally {
+                } catch (e) {} finally {
                   _isPicking = false;
                 }
               });
@@ -1093,7 +1139,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
             if (jsPromptRequest.message == 'window_open') {
               final url = jsPromptRequest.defaultValue ?? '';
               if (url.isNotEmpty) {
-                debugPrint('PROMPT window_open -> $url');
                 try { await controller.loadUrl(urlRequest: URLRequest(url: WebUri(url))); } catch (_) {}
               }
               return JsPromptResponse(handledByClient: true, action: JsPromptResponseAction.CONFIRM, value: 'ok');

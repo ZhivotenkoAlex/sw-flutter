@@ -10,6 +10,10 @@ void main() async {
   if (!kIsWeb) {
     try {
       await FirebaseMessagingService.initialize();
+      FirebaseMessagingService.configureApi(
+        baseUrl: 'https://europe-central2-development-417611.cloudfunctions.net/kanuj-wygrywaj-backend',
+        registerPath: '/notifications/register-token',
+      );
     } catch (e) {
       print('Firebase initialization failed, continuing without it: $e');
     }
