@@ -1035,14 +1035,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 try {
                   final uid = (args.isNotEmpty ? args[0] : '')?.toString() ?? '';
                   final company = args.length > 1 ? args[1]?.toString() : null;
-                  debugPrint('registerPush called from WebView: uid=' + uid + ' company=' + (company ?? '-'));
-                  debugPrint('Current FCM token: ' + (FirebaseMessagingService.fcmToken ?? 'null'));
+                  debugPrint('[WEBVIEW] registerPush: uid=' + uid + ' company=' + (company ?? '-'));
+                  debugPrint('[WEBVIEW] fcmToken(before)=' + (FirebaseMessagingService.fcmToken ?? 'null'));
                   if (uid.isEmpty) return {'error': 'no_user'};
                   await FirebaseMessagingService.registerToken(userId: uid, company: company);
-                  debugPrint('registerPush finished for uid=' + uid);
+                  debugPrint('[WEBVIEW] registerPush done uid=' + uid + ' fcmToken(after)=' + (FirebaseMessagingService.fcmToken ?? 'null'));
                   return {'ok': true, 'token': FirebaseMessagingService.fcmToken};
                 } catch (e) {
-                  debugPrint('registerPush error: ' + e.toString());
+                  debugPrint('[WEBVIEW] registerPush error: ' + e.toString());
                   return {'error': e.toString()};
                 }
               },
@@ -1053,10 +1053,46 @@ class _WebViewScreenState extends State<WebViewScreen> {
               callback: (args) async {
                 try {
                   final uid = (args.isNotEmpty ? args[0] : '')?.toString() ?? '';
-                  debugPrint('logoutPush called from WebView: uid=' + uid);
+                  debugPrint('[WEBVIEW] logoutPush uid=' + uid);
                   if (uid.isEmpty) return {'error': 'no_user'};
                   await FirebaseMessagingService.unregisterToken(userId: uid);
-                  debugPrint('logoutPush finished for uid=' + uid);
+                  debugPrint('[WEBVIEW] logoutPush done uid=' + uid);
+                  return {'ok': true};
+                } catch (e) { return {'error': e.toString()}; }
+              },
+            );
+
+            // Generic setUser handler to auto-upsert token for ANY auth type
+            _inAppController?.addJavaScriptHandler(
+              handlerName: 'setUser',
+              callback: (args) async {
+                try {
+                  final uid = (args.isNotEmpty ? args[0] : '')?.toString() ?? '';
+                  final company = args.length > 1 ? args[1]?.toString() : null;
+                  if (uid.isEmpty) return {'error': 'no_user'};
+                  debugPrint('[WEBVIEW] setUser uid=' + uid + ' company=' + (company ?? '-'));
+                  FirebaseMessagingService.setLoggedInUser(uid, company: company);
+                  await FirebaseMessagingService.registerToken(userId: uid, company: company);
+                  debugPrint('[WEBVIEW] setUser done uid=' + uid + ' fcmToken=' + (FirebaseMessagingService.fcmToken ?? 'null'));
+                  return {'ok': true, 'token': FirebaseMessagingService.fcmToken};
+                } catch (e) {
+                  debugPrint('[WEBVIEW] setUser error: ' + e.toString());
+                  return {'error': e.toString()};
+                }
+              },
+            );
+
+            // DEBUG ONLY: allow forcing a token from web on Simulator to validate backend
+            _inAppController?.addJavaScriptHandler(
+              handlerName: 'debugRegisterPushWithToken',
+              callback: (args) async {
+                try {
+                  final uid = (args.isNotEmpty ? args[0] : '')?.toString() ?? '';
+                  final String token = ((args.length > 1 ? args[1] : '')?.toString() ?? '');
+                  final company = args.length > 2 ? args[2]?.toString() : null;
+                  if (uid.isEmpty || token.isEmpty) return {'error': 'need_user_and_token'};
+                  debugPrint('[WEBVIEW] debugRegisterPushWithToken uid=' + uid + ' tokenLen=' + token.length.toString());
+                  await FirebaseMessagingService.registerTokenWith(userId: uid, token: token, company: company);
                   return {'ok': true};
                 } catch (e) { return {'error': e.toString()}; }
               },
