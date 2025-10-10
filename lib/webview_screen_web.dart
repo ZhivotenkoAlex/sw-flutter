@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'dart:html' as html;
 import 'dart:ui_web' as ui;
 
-const url = 'https://skanuj-staging.web.app?company_name=kazimierz-club-new';
+const url = 'https://login.2take.it/?company_name=galeria-kazimierz&legacy=true&d=9e30d60cdabaa8c6859b7ee737cd943b23d727b3';
 
 // Register the view factory only once
 void _registerIFrameViewFactory() {

@@ -29,6 +29,42 @@ class _WebViewScreenState extends State<WebViewScreen> {
   String? _pendingImageDataUrl; // pull-based bridge buffer
   bool _isPicking = false; // prevent duplicate pickers
 
+  String get _app2tiBridgeJs => '''
+    (function(){
+      try {
+        if (!window.APP2TI) window.APP2TI = {};
+        window.APP2TI.startScan = function() {
+          try { window.flutter_inappwebview?.callHandler('app2ti_startScan'); } catch(e) { console.error(e); }
+        };
+        window.APP2TI.startScanForId = function(id) {
+          try { window.flutter_inappwebview?.callHandler('app2ti_startScan', { id: String(id||'') }); } catch(e) { console.error(e); }
+        };
+        window.APP2TI.giveApiToken = function(token, uid) {
+          try { window.flutter_inappwebview?.callHandler('app2ti_giveApiToken', { token: String(token||''), uid: String(uid||'') }); } catch(e) { console.error(e); }
+        };
+
+        function _forward(msg, targetOrigin){
+          try { window.flutter_inappwebview?.callHandler('webview_postMessage', String(msg||''), String(targetOrigin||'*')); } catch(e){ console.error('postMessage bridge failed', e); }
+        }
+        try {
+          var _origParentPostMessage = (window.parent && window.parent.postMessage) ? window.parent.postMessage.bind(window.parent) : null;
+          window.parent.postMessage = function(message, targetOrigin) {
+            _forward(message, targetOrigin);
+            try { if (_origParentPostMessage) _origParentPostMessage(message, targetOrigin); } catch(_) {}
+          };
+        } catch(e) { console.error('override parent.postMessage failed', e); }
+
+        try {
+          var _origWindowPostMessage = window.postMessage ? window.postMessage.bind(window) : null;
+          window.postMessage = function(message, targetOrigin) {
+            _forward(message, targetOrigin);
+            try { if (_origWindowPostMessage) _origWindowPostMessage(message, targetOrigin); } catch(_) {}
+          };
+        } catch(e) { console.error('override window.postMessage failed', e); }
+      } catch(e) { console.error('bridge init failed', e); }
+    })();
+  ''';
+
   @override
   void initState() {
     super.initState();
@@ -630,7 +666,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final initialUrl = 'https://skanuj-staging.web.app?company_name=kazimierz-club-new';
+    final initialUrl = 'https://login.2take.it/?company_name=galeria-kazimierz&legacy=true&d=9e30d60cdabaa8c6859b7ee737cd943b23d727b3';
     return Scaffold(
       body: SafeArea(
         child: InAppWebView(
@@ -650,6 +686,240 @@ class _WebViewScreenState extends State<WebViewScreen> {
             userAgent: 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36 SkanujWygrywaj/Flutter',
           ),
           initialUserScripts: UnmodifiableListView<UserScript>([
+            // APP2TI/postMessage bridge
+            UserScript(
+              source: _app2tiBridgeJs,
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+              forMainFrameOnly: false,
+            ),
+            // Intercept Google sign-in UI clicks to trigger native GoogleSignIn
+            UserScript(
+              source: '''
+                (function(){
+                  try {
+                    if (window.__googleNativeInterceptorInstalled) return;
+                    window.__googleNativeInterceptorInstalled = true;
+
+                    function isGoogleButton(el){
+                      try {
+                        if (!el) return false;
+                        const tag = (el.tagName||'').toString().toLowerCase();
+                        if (tag === 'g-signin-button' || tag === 'googlelogin') return true;
+                        const cls = (el.className||'').toString().toLowerCase();
+                        const id  = (el.id||'').toString().toLowerCase();
+                        const txt = (el.textContent||'').toString().toLowerCase();
+                        if (cls.includes('gsi') || cls.includes('g-signin') || cls.includes('abcriobutton') ||
+                            cls.includes('google') || cls.includes('signin')) return true;
+                        if (id.includes('g_id') || id.includes('google') || id.includes('signin')) return true;
+                        if (txt.includes('google')) return true;
+                        return false;
+                      } catch(_) { return false; }
+                    }
+
+                    function tryTriggerAgreementError(){
+                      try {
+                        if (typeof window.triggerAgreementError === 'function') { window.triggerAgreementError(); return true; }
+                        var root = document.querySelector('#app, [data-app], .v-application, [data-v-app]');
+                        var vm = root && root.__vue__;
+                        function walkVue2(c){ if(!c) return null; if (typeof c.triggerAgreementError === 'function') return c; var kids = c['\x24children']||[]; for (var i=0;i<kids.length;i++){ var r = walkVue2(kids[i]); if (r) return r; } return null; }
+                        var target2 = vm && walkVue2(vm);
+                        if (target2) { try { target2.triggerAgreementError(); return true; } catch(_){} }
+                        if (window.__vue_app__ && window.__vue_app__._instance) {
+                          var inst = window.__vue_app__._instance;
+                          function walkVue3(n){ if(!n) return null; var p=n.proxy; if(p && typeof p.triggerAgreementError==='function') return p; var ch=[]; try { if (n.subTree && n.subTree.component) ch.push(n.subTree.component); if (n.components) { for (var k in n.components){ if(n.components[k]&&n.components[k].component) ch.push(n.components[k].component);} } } catch(_){} for (var i=0;i<ch.length;i++){ var r=walkVue3(ch[i]); if(r) return r; } return null; }
+                          var target3 = walkVue3(inst);
+                          if (target3) { try { target3.triggerAgreementError(); return true; } catch(_){} }
+                        }
+                      } catch(e) { console.error('triggerAgreementError call failed', e); }
+                      return false;
+                    }
+
+                    document.addEventListener('click', function(e){
+                      try {
+                        var el = e.target; 
+                        if (el && el.closest) {
+                          el = el.closest('button, a, g-signin-button, googlelogin, .gsi-material-button, .g-signin-button, .abcRioButton, [data-provider="google"], [id*="g_id" i], [class*="google" i], [class*="signin" i]');
+                        }
+                        if (!isGoogleButton(el)) return;
+                        // If button is visually disabled by class, trigger page error
+                        var disabledByClass = false;
+                        try { disabledByClass = !!(el && el.closest && el.closest('.no-pointer-events')); } catch(_) {}
+                        if (disabledByClass) {
+                          console.log('[NATIVE->WEB] google button disabled by class; triggering page error');
+                          try {
+                            if (!window.__flutterTriggeringAgreement) {
+                              window.__flutterTriggeringAgreement = true;
+                              tryTriggerAgreementError();
+                              setTimeout(function(){ window.__flutterTriggeringAgreement = false; }, 50);
+                            }
+                          } catch(_) {}
+                          return; // let page handlers run too
+                        }
+                        // Check "regulamin" agreement; if not agreed, let the page handle the click (shows error)
+                        var agreed = (function(){
+                          try {
+                            var cb = document.querySelector('.regulamin-checkbox input[type="checkbox"], .regulamin-checkbox [role="checkbox"], input[role="checkbox"][id^="input-"]');
+                            if (!cb) return true; // no checkbox on this screen
+                            if (cb.type === 'checkbox') return !!cb.checked;
+                            var aria = cb.getAttribute('aria-checked');
+                            return aria === 'true';
+                          } catch(_) { return true; }
+                        })();
+                        if (!agreed) { 
+                          console.log('[NATIVE->WEB] terms not accepted; triggering page error');
+                          try {
+                            if (!window.__flutterTriggeringAgreement) {
+                              window.__flutterTriggeringAgreement = true;
+                              tryTriggerAgreementError();
+                              setTimeout(function(){ window.__flutterTriggeringAgreement = false; }, 50);
+                            }
+                          } catch(_) {}
+                          return; // allow page handler too
+                        }
+                        e.preventDefault(); e.stopPropagation();
+                        try { window.prompt('google_native_signin', ''); } catch(_) {}
+                        return false;
+                      } catch(_) {}
+                    }, true);
+
+                    // Observe DOM for dynamically added Google buttons
+                    try {
+                      const mo = new MutationObserver(function(muts){ /* no-op; click handler is global */ });
+                      mo.observe(document.documentElement||document.body, {childList:true, subtree:true});
+                    } catch(_) {}
+                  } catch(e) { console.error('google native interceptor failed', e); }
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+              forMainFrameOnly: false,
+            ),
+            // Provide onFlutterGoogleSignIn that logs into the web app directly via its API
+            UserScript(
+              source: r'''
+                (function(){
+                  if (typeof window.onFlutterGoogleSignIn === 'function') return;
+                  window.onFlutterGoogleSignIn = async function(p){
+                    try {
+                      const idToken = (p && p.idToken) ? String(p.idToken) : '';
+                      if (!idToken) { console.error('No idToken provided'); return false; }
+
+                      const q = new URLSearchParams(location.search);
+                      const company = q.get('company_name') || (window.companyconfig && window.companyconfig.getCompanyIdfromUrl && window.companyconfig.getCompanyIdfromUrl()) || '';
+                      const legacy = !!q.get('legacy');
+
+                      // Force single endpoint for this host
+                      try {
+                        const fixedUrl = 'https://login.2take.it/api/web/user/google-login';
+                        console.log('[NATIVE->WEB] using fixed login URL', fixedUrl);
+                        const r = await fetch(fixedUrl, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          credentials: 'include',
+                          body: JSON.stringify({ access_token: idToken, company_url: company, invite_code: '', legacy })
+       
+                        });
+                        console.log('[NATIVE->WEB] fixed login response', JSON.stringify(r));
+                        console.log("🚀 ~ idToken:", idToken);
+                        console.log("🚀 ~ company:", company);
+                        console.log("🚀 ~ legacy:", legacy);
+
+                        const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+                        if (r.ok && ct.indexOf('application/json') >= 0) {
+                          const data = await r.json();
+                          console.log('[NATIVE->WEB] fixed login json', data);
+                          const urlToGo = (data && data.url) ? String(data.url) : '';
+                          if (urlToGo) {
+                            console.log('[NATIVE->WEB] fixed login ok; redirect:', urlToGo);
+                            location.replace(urlToGo);
+                            return true;
+                          }
+                          if (data && data.token) {
+                            const ACCESS = 'access_token_' + company;
+                            const REFRESH = 'id_token_' + company;
+                            const EXP = 'expirationtime_' + company;
+                            localStorage.setItem(ACCESS, data.token);
+                            localStorage.setItem(REFRESH, data.refresh_token || '');
+                            const expMs = (Number(data.expiry_second || 0)*1000);
+                            const expDate = new Date(Date.now() + expMs - 18000);
+                            localStorage.setItem(EXP, expDate.toString());
+                            console.log('[NATIVE->WEB] fixed login ok; no url, reloading');
+                            location.reload();
+                            return true;
+                          }
+                          console.warn('[NATIVE->WEB] fixed login: no url or token in response');
+                        } else {
+                          console.warn('[NATIVE->WEB] fixed login http', r.status, 'at', fixedUrl);
+                        }
+                      } catch(e) { console.error('[NATIVE->WEB] fixed login fetch error', e); }
+                      return false;
+
+                      const origin = location.origin.replace(/\/+$/,'');
+                      let bases = [];
+                      try {
+                        if (window.GlobalConfig && window.GlobalConfig.baseUrl) {
+                          bases.push(String(window.GlobalConfig.baseUrl).replace(/\/+$/,'/'));
+                        }
+                      } catch(_) {}
+                      bases.push(origin + '/api/');
+                      bases.push(origin + '/api/web/');
+                      bases.push('https://login.2take.it/api/web/');
+                      bases.push('https://app.dev.2take.it/api/');
+                      bases.push('https://app.blovly.com/api/');
+                      bases = Array.from(new Set(bases));
+
+                      async function tryLogin(base){
+                        try {
+                          const url = base + 'user/google-login';
+                          console.log('[NATIVE->WEB] trying', url);
+                          const r = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ access_token: idToken, company_url: company, invite_code: '', legacy })
+                          });
+                          const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+                          if (!r.ok || ct.indexOf('application/json') < 0) {
+                            console.warn('[NATIVE->WEB] login http', r.status, 'at', url);
+                            return null;
+                          }
+                          return await r.json();
+                        } catch(e) {
+                          console.error('[NATIVE->WEB] login fetch error at', base, e);
+                          return null;
+                        }
+                      }
+
+                      let data = null; let usedBase = null;
+                      for (let i = 0; i < bases.length && !data; i++) {
+                        const d = await tryLogin(bases[i]);
+                        if (d && d.token) { data = d; usedBase = bases[i]; }
+                      }
+                      if (!data || !data.token) { console.error('[NATIVE->WEB] login failed for all bases', bases); return false; }
+                      console.log('[NATIVE->WEB] login ok at', usedBase, 'redirect:', (data && data.url) ? data.url : '');
+
+                      const ACCESS = 'access_token_' + company;
+                      const REFRESH = 'id_token_' + company;
+                      const EXP = 'expirationtime_' + company;
+                      localStorage.setItem(ACCESS, data.token);
+                      localStorage.setItem(REFRESH, data.refresh_token || '');
+                      const expMs = (Number(data.expiry_second || 0)*1000);
+                      const expDate = new Date(Date.now() + expMs - 18000);
+                      localStorage.setItem(EXP, expDate.toString());
+
+                      if (data.url) { location.href = data.url; }
+                      else {
+                        try { if (window.__appRouter && window.__appRouter.push) { window.__appRouter.push({ name: 'rules', query: { company_name: company } }); return true; } } catch(_){ }
+                        location.reload();
+                      }
+                      return true;
+                    } catch(e) { console.error('onFlutterGoogleSignIn error', e); return false; }
+                  };
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+              forMainFrameOnly: false,
+            ),
+            // Do not override APP2TI provided by the page; we only call into it.
             // Soft-disable web push errors by stubbing unsupported APIs early
             UserScript(
               source: '''
@@ -868,6 +1138,364 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 })();
               ''',
               injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+            ),
+            UserScript(
+              source: r'''
+                (function(){
+                  try {
+                    function isFacebookButton(el){
+                      try {
+                        if (!el) return false;
+                        var n = (el.nodeName||'').toLowerCase();
+                        if (n === 'fblogin') return true;
+                        var cls = (el.className||'').toString().toLowerCase();
+                        var id  = (el.id||'').toString().toLowerCase();
+                        var txt = (el.textContent||'').toString().toLowerCase();
+                        if (cls.includes('facebook') || cls.includes('fb-login') || cls.includes('social-icon--facebook')) return true;
+                        if (id.includes('facebook') || id.includes('fb')) return true;
+                        if (txt.includes('facebook')) return true;
+                        return false;
+                      } catch(_) { return false; }
+                    }
+
+                    document.addEventListener('click', function(e){
+                      try {
+                        var el = e.target;
+                        if (el && el.closest) {
+                          el = el.closest('button, a, fblogin, [data-provider="facebook"], [class*="facebook" i], [class*="fb-login" i]');
+                        }
+                        if (!isFacebookButton(el)) return;
+                        // Disabled by class
+                        var disabledByClass = false;
+                        try { disabledByClass = !!(el && el.closest && el.closest('.no-pointer-events')); } catch(_) {}
+                        if (disabledByClass) {
+                          console.log('[NATIVE->WEB] facebook button disabled by class; triggering page error');
+                          try { if (!window.__flutterTriggeringAgreement) { window.__flutterTriggeringAgreement = true; tryTriggerAgreementError(); setTimeout(function(){ window.__flutterTriggeringAgreement = false; }, 50); } } catch(_) {}
+                          return; // let page show its own error too
+                        }
+                        // Check checkbox
+                        var agreed = (function(){
+                          try {
+                            var cb = document.querySelector('.regulamin-checkbox input[type="checkbox"], .regulamin-checkbox [role="checkbox"], input[role="checkbox"][id^="input-"]');
+                            if (!cb) return true;
+                            if (cb.type === 'checkbox') return !!cb.checked;
+                            var aria = cb.getAttribute('aria-checked');
+                            return aria === 'true';
+                          } catch(_) { return true; }
+                        })();
+                        if (!agreed) {
+                          console.log('[NATIVE->WEB] terms not accepted; triggering page error (fb)');
+                          try { if (!window.__flutterTriggeringAgreement) { window.__flutterTriggeringAgreement = true; tryTriggerAgreementError(); setTimeout(function(){ window.__flutterTriggeringAgreement = false; }, 50); } } catch(_) {}
+                          return;
+                        }
+                        e.preventDefault(); e.stopPropagation();
+                        try { window.prompt('facebook_native_signin', ''); } catch(_) {}
+                        return false;
+                      } catch(_) {}
+                    }, true);
+                  } catch(e) { console.error('facebook native interceptor failed', e); }
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+              forMainFrameOnly: false,
+            ),
+            // Provide onFlutterFacebookSignIn that logs into the web app directly via its API
+            UserScript(
+              source: r'''
+                (function(){
+                  if (typeof window.onFlutterFacebookSignIn === 'function') return;
+                  window.onFlutterFacebookSignIn = async function(p){
+                    try {
+                      const accessToken = (p && p.accessToken) ? String(p.accessToken) : '';
+                      if (!accessToken) { console.error('No accessToken provided'); return false; }
+
+                      const q = new URLSearchParams(location.search);
+                      const company = q.get('company_name') || (window.companyconfig && window.companyconfig.getCompanyIdfromUrl && window.companyconfig.getCompanyIdfromUrl()) || '';
+                      const legacy = !!q.get('legacy');
+
+                      // Force single endpoint for this host
+                      try {
+                        const fixedUrl = 'https://login.2take.it/api/web/user/fblogin';
+                        console.log('[NATIVE->WEB] using fixed login URL', fixedUrl);
+                        const r = await fetch(fixedUrl, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          credentials: 'include',
+                          body: JSON.stringify({ access_token: accessToken, company_url: company, invite_code: '', legacy })
+                        });
+                        console.log('[NATIVE->WEB] fixed login response', JSON.stringify(r));
+                        console.log("🚀 ~ accessToken:", accessToken);
+                        console.log("🚀 ~ company:", company);
+                        console.log("🚀 ~ legacy:", legacy);
+
+                        const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+                        if (r.ok && ct.indexOf('application/json') >= 0) {
+                          const data = await r.json();
+                          console.log('[NATIVE->WEB] fixed login json', data);
+                          const urlToGo = (data && data.url) ? String(data.url) : '';
+                          if (urlToGo) {
+                            console.log('[NATIVE->WEB] fixed login ok; redirect:', urlToGo);
+                            location.replace(urlToGo);
+                            return true;
+                          }
+                          if (data && data.token) {
+                            const ACCESS = 'access_token_' + company;
+                            const REFRESH = 'id_token_' + company;
+                            const EXP = 'expirationtime_' + company;
+                            localStorage.setItem(ACCESS, data.token);
+                            localStorage.setItem(REFRESH, data.refresh_token || '');
+                            const expMs = (Number(data.expiry_second || 0)*1000);
+                            const expDate = new Date(Date.now() + expMs - 18000);
+                            localStorage.setItem(EXP, expDate.toString());
+                            console.log('[NATIVE->WEB] fixed login ok; no url, reloading');
+                            location.reload();
+                            return true;
+                          }
+                          console.warn('[NATIVE->WEB] fixed login: no url or token in response');
+                        } else {
+                          console.warn('[NATIVE->WEB] fixed login http', r.status, 'at', fixedUrl);
+                        }
+                      } catch(e) { console.error('[NATIVE->WEB] fixed login fetch error', e); }
+                      return false;
+
+                      const origin = location.origin.replace(/\/+$/,'');
+                      let bases = [];
+                      try {
+                        if (window.GlobalConfig && window.GlobalConfig.baseUrl) {
+                          bases.push(String(window.GlobalConfig.baseUrl).replace(/\/+$/,'/'));
+                        }
+                      } catch(_) {}
+                      bases.push(origin + '/api/');
+                      bases.push(origin + '/api/web/');
+                      bases.push('https://login.2take.it/api/web/');
+                      bases.push('https://app.dev.2take.it/api/');
+                      bases.push('https://app.blovly.com/api/');
+                      bases = Array.from(new Set(bases));
+
+                      async function tryLogin(base){
+                        try {
+                          const url = base + 'user/facebook-login';
+                          console.log('[NATIVE->WEB] trying', url);
+                          const r = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ access_token: accessToken, company_url: company, invite_code: '', legacy })
+                          });
+                          const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+                          if (!r.ok || ct.indexOf('application/json') < 0) {
+                            console.warn('[NATIVE->WEB] login http', r.status, 'at', url);
+                            return null;
+                          }
+                          return await r.json();
+                        } catch(e) {
+                          console.error('[NATIVE->WEB] login fetch error at', base, e);
+                          return null;
+                        }
+                      }
+
+                      let data = null; let usedBase = null;
+                      for (let i = 0; i < bases.length && !data; i++) {
+                        const d = await tryLogin(bases[i]);
+                        if (d && d.token) { data = d; usedBase = bases[i]; }
+                      }
+                      if (!data || !data.token) { console.error('[NATIVE->WEB] login failed for all bases', bases); return false; }
+                      console.log('[NATIVE->WEB] login ok at', usedBase, 'redirect:', (data && data.url) ? data.url : '');
+
+                      const ACCESS = 'access_token_' + company;
+                      const REFRESH = 'id_token_' + company;
+                      const EXP = 'expirationtime_' + company;
+                      localStorage.setItem(ACCESS, data.token);
+                      localStorage.setItem(REFRESH, data.refresh_token || '');
+                      const expMs = (Number(data.expiry_second || 0)*1000);
+                      const expDate = new Date(Date.now() + expMs - 18000);
+                      localStorage.setItem(EXP, expDate.toString());
+
+                      if (data.url) { location.href = data.url; }
+                      else {
+                        try { if (window.__appRouter && window.__appRouter.push) { window.__appRouter.push({ name: 'rules', query: { company_name: company } }); return true; } } catch(_){ }
+                        location.reload();
+                      }
+                      return true;
+                    } catch(e) { console.error('onFlutterFacebookSignIn error', e); return false; }
+                  };
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+              forMainFrameOnly: false,
+            ),
+            UserScript(
+              source: '''
+                (function(){
+                  try {
+                    // Shim for Flutter bridge using prompt
+                    if (!window.Flutter) window.Flutter = {};
+                    if (typeof window.Flutter.postMessage !== 'function') {
+                      window.Flutter.postMessage = function(message) {
+                        try { return window.prompt(String(message || ''), ''); } catch (e) { return null; }
+                      };
+                      console.log('✅ Flutter.postMessage shim installed');
+                    }
+                    // Provide HostApp/FlutterHost compatible bridge expected by the web app
+                    var hostObj = {
+                      postMessage: function(payload) {
+                        try {
+                          var msg = payload;
+                          if (typeof payload === 'string') { try { msg = JSON.parse(payload); } catch(_) {} }
+                          console.log('🎯 HostApp.postMessage received:', msg);
+                          if (msg && (msg.type === 'chooseImage' || msg.type === 'choosePhoto')) {
+                            try { window.prompt('file_picker_request', ''); } catch(_) {}
+                            return 'ok';
+                          }
+                        } catch(err) { console.log('⚠️ HostApp.postMessage error', err); }
+                        return null;
+                      }
+                    };
+                    if (!window.HostApp) window.HostApp = hostObj;
+                    if (!window.FlutterHost) window.FlutterHost = hostObj;
+                    console.log('✅ HostApp/FlutterHost shim installed');
+                  } catch (e) { console.log('⚠️ postMessage shim error', e); }
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+            ),
+            UserScript(
+              source: '''
+                (function(){
+                  try {
+                    // Intercept file input programmatic/native openings
+                    var HTMLInputProto = window.HTMLInputElement && window.HTMLInputElement.prototype;
+                    if (HTMLInputProto) {
+                      var __origClick = HTMLInputProto.click;
+                      if (typeof __origClick === 'function') {
+                        HTMLInputProto.click = function() {
+                          try {
+                            if (this && String(this.type).toLowerCase() === 'file') {
+                              window.currentFileInput = this;
+                              try { window.Flutter && window.Flutter.postMessage && window.Flutter.postMessage('file_picker_request'); } catch(_) {}
+                              return; // swallow native chooser
+                            }
+                          } catch(_) {}
+                          return __origClick.apply(this, arguments);
+                        };
+                      }
+                      var __origShowPicker = HTMLInputProto.showPicker;
+                      if (typeof __origShowPicker === 'function') {
+                        HTMLInputProto.showPicker = function() {
+                          try {
+                            if (this && String(this.type).toLowerCase() === 'file') {
+                              window.currentFileInput = this;
+                              try { window.Flutter && window.Flutter.postMessage && window.Flutter.postMessage('file_picker_request'); } catch(_) {}
+                              return; // swallow native chooser
+                            }
+                          } catch(_) {}
+                          return __origShowPicker.apply(this, arguments);
+                        };
+                      }
+                    }
+                    // Capture label clicks that target file inputs
+                    document.addEventListener('click', function(e){
+                      try {
+                        var label = e.target && e.target.closest ? e.target.closest('label[for], label') : null;
+                        if (label) {
+                          var forAttr = label.getAttribute('for');
+                          var inp = forAttr ? document.getElementById(forAttr) : (label.querySelector && label.querySelector('input[type="file"]'));
+                          if (inp && String(inp.type).toLowerCase() === 'file') {
+                            e.preventDefault(); e.stopPropagation();
+                            window.currentFileInput = inp;
+                            try { window.Flutter && window.Flutter.postMessage && window.Flutter.postMessage('file_picker_request'); } catch(_) {}
+                          }
+                        }
+                      } catch(_) {}
+                    }, true);
+                  } catch (e) { console.error('⚠️ file input intercept failed', e); }
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+            ),
+            UserScript(
+              source: '''
+                (function(){
+                  try {
+                    if (!window.__dispatchFlutterImage) {
+                      window.__dispatchFlutterImage = function(dataUrl, fileName) {
+                        try {
+                          var detail = { fileName: String(fileName || 'photo.jpg'), fileData: String(dataUrl || '') };
+                          var now = Date.now();
+                          window.__lastDispatchTime = now;
+                          window.__lastFlutterImage = detail;
+                          // Single dispatch path only
+                          try { window.dispatchEvent(new CustomEvent('flutter_file_selected', { detail: detail, bubbles: true, composed: true })); } catch(e){}
+                          return true;
+                        } catch (e) {
+                          console.error('⚠️ __dispatchFlutterImage error', e);
+                          return false;
+                        }
+                      };
+                    }
+                  } catch(e) { console.error('⚠️ install __dispatchFlutterImage failed', e); }
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+            ),
+            UserScript(
+              source: r'''
+                (function(){
+                  if (typeof window.onFlutterFacebookLogin === 'function') return;
+                  window.onFlutterFacebookLogin = async function(p){
+                    try {
+                      const accessToken = (p && p.accessToken) ? String(p.accessToken) : '';
+                      if (!accessToken) { console.error('No accessToken provided (fb)'); return false; }
+                      const q = new URLSearchParams(location.search);
+                      const company = q.get('company_name') || (window.companyconfig && window.companyconfig.getCompanyIdfromUrl && window.companyconfig.getCompanyIdfromUrl()) || '';
+                      const legacy = !!q.get('legacy');
+                      const origin = location.origin.replace(/\/+$/,'');
+                      let bases = [];
+                      try { if (window.GlobalConfig && window.GlobalConfig.baseUrl) { bases.push(String(window.GlobalConfig.baseUrl).replace(/\/+$/,'/')); } } catch(_) {}
+                      bases.push(origin + '/api/');
+                      bases.push(origin + '/api/web/');
+                      bases.push('https://login.2take.it/api/web/');
+                      bases = Array.from(new Set(bases));
+
+                      async function tryLogin(base){
+                        try {
+                          const u = base + 'user/fblogin';
+                          console.log('[NATIVE->WEB][FB] trying', u);
+                          const r = await fetch(u, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                            body: JSON.stringify({ access_token: accessToken, company_url: company, invite_code: '', legacy })
+                          });
+                          const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+                          if (!r.ok || ct.indexOf('application/json') < 0) { console.warn('[NATIVE->WEB][FB] http', r.status, 'at', u); return null; }
+                          return await r.json();
+                        } catch(e) { console.error('[NATIVE->WEB][FB] fetch error at', base, e); return null; }
+                      }
+
+                      let data = null, usedBase = null;
+                      for (let i=0; i<bases.length && !data; i++) {
+                        const d = await tryLogin(bases[i]);
+                        if (d) { data = d; usedBase = bases[i]; }
+                      }
+                      if (!data) { console.error('[NATIVE->WEB][FB] login failed for all bases', bases); return false; }
+                      console.log('[NATIVE->WEB][FB] login ok at', usedBase, 'redirect:', (data && data.url) ? data.url : 'reload');
+                      if (data.token) {
+                        const ACCESS = 'access_token_' + company;
+                        const REFRESH = 'id_token_' + company;
+                        const EXP = 'expirationtime_' + company;
+                        localStorage.setItem(ACCESS, data.token);
+                        localStorage.setItem(REFRESH, data.refresh_token || '');
+                        const expMs = (Number(data.expiry_second || 0)*1000);
+                        const expDate = new Date(Date.now() + expMs - 18000);
+                        localStorage.setItem(EXP, expDate.toString());
+                      }
+                      if (data.url) { location.replace(data.url); } else { location.reload(); }
+                      return true;
+                    } catch(e) { console.error('onFlutterFacebookLogin error', e); return false; }
+                  };
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+              forMainFrameOnly: false,
             )
           ]),
           onWebViewCreated: (controller) async {
@@ -1098,9 +1726,16 @@ class _WebViewScreenState extends State<WebViewScreen> {
               },
             );
           },
-          onConsoleMessage: (controller, msg) {},
+          onConsoleMessage: (controller, msg) {
+            try {
+              debugPrint('[WEBVIEW CONSOLE] ' + msg.message);
+            } catch (_) {}
+          },
           onLoadStart: (controller, url) async {},
-          onLoadStop: (controller, url) async { await _injectPermissionOverrides(); },
+          onLoadStop: (controller, url) async {
+            await _injectPermissionOverrides();
+            try { await controller.evaluateJavascript(source: _app2tiBridgeJs); } catch (_) {}
+          },
           onLoadError: (controller, url, code, message) {},
           shouldOverrideUrlLoading: (controller, navAction) async {
             final url = navAction.request.url?.toString() ?? '';
@@ -1175,8 +1810,118 @@ class _WebViewScreenState extends State<WebViewScreen> {
             if (jsPromptRequest.message == 'window_open') {
               final url = jsPromptRequest.defaultValue ?? '';
               if (url.isNotEmpty) {
+                if (url.contains('accounts.google.com') || url.contains('oauth2') || url.contains('gsi/client')) {
+                  try { await ChromeSafariBrowser().open(url: WebUri(url)); } catch (_) {}
+                } else {
                 try { await controller.loadUrl(urlRequest: URLRequest(url: WebUri(url))); } catch (_) {}
+                }
               }
+              return JsPromptResponse(handledByClient: true, action: JsPromptResponseAction.CONFIRM, value: 'ok');
+            }
+            if (jsPromptRequest.message == 'google_native_signin') {
+              // Do not block the JS prompt; run sign-in asynchronously
+              Future.microtask(() async {
+                try {
+                  await _googleSignIn!.signOut();
+                  final account = await _googleSignIn!.signIn();
+                  if (account != null) {
+                    var auth = await account.authentication;
+                    if ((auth.idToken == null || auth.idToken!.isEmpty) && (auth.accessToken == null || auth.accessToken!.isEmpty)) {
+                      await Future.delayed(const Duration(milliseconds: 300));
+                      auth = await account.authentication;
+                    }
+                    // Prefer calling the page's own API directly if available
+                    String jsTpl = r"""
+                      (async function(){
+                        try {
+                          console.log('[NATIVE->WEB] Attempting onFlutterGoogleSignIn hook');
+                          var hook = (typeof window.onFlutterGoogleSignIn === 'function') ? window.onFlutterGoogleSignIn : null;
+                          if (hook) {
+                            var payload = { idToken: '%IDTOKEN%', companyName: (window.__companyName||'') };
+                            console.log('[NATIVE->WEB] Calling onFlutterGoogleSignIn with payload', payload);
+                            var res = await hook(payload);
+                            console.log('[NATIVE->WEB] onFlutterGoogleSignIn result', res);
+                          } else {
+                            console.warn('[NATIVE->WEB] onFlutterGoogleSignIn not found, dispatching event');
+                            try { window.dispatchEvent(new CustomEvent('flutter_google_tokens', { detail: { idToken: '%IDTOKEN%', accessToken: '%ACCTOKEN%', serverAuthCode: '%CODE%', email: '%EMAIL%', fallback: false } })); } catch(_){ console.error('event dispatch failed', _); }
+                            try { if (window.APP2TI && typeof window.APP2TI.onFlutterToken === 'function') { await window.APP2TI.onFlutterToken('%IDTOKEN%'); } } catch(_){ console.error('APP2TI.onFlutterToken call failed', _); }
+                            // Direct login fallback: call fixed endpoint and redirect
+                            try {
+                              var params = new URLSearchParams(location.search);
+                              var company = params.get('company_name') || '';
+                              var legacy = !!params.get('legacy');
+                              var url = 'https://login.2take.it/api/web/user/google-login';
+                              console.log('[NATIVE->WEB] direct login POST', url, 'company=', company, 'legacy=', legacy);
+                              var resp = await fetch(url, {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                                body: JSON.stringify({ access_token: '%IDTOKEN%', company_url: company, invite_code: '', legacy: legacy })
+                              });
+                              var ct = (resp.headers && resp.headers.get && resp.headers.get('content-type')) || '';
+                              if (resp.ok && ct.indexOf('application/json') >= 0) {
+                                var data = await resp.json();
+                                console.log('[NATIVE->WEB] direct login ok; redirect:', (data && data.url) ? data.url : 'reload');
+                                if (data && data.url) { location.replace(data.url); } else { location.reload(); }
+                              } else {
+                                console.warn('[NATIVE->WEB] direct login http', resp && resp.status);
+                              }
+                            } catch(ex) { console.error('[NATIVE->WEB] direct login error', ex); }
+                          }
+                        } catch(e) { console.error('dispatch native google token failed', e); }
+                      })();
+                    """;
+                    jsTpl = jsTpl
+                      .replaceAll('%IDTOKEN%', (auth.idToken ?? '').replaceAll("'", "\\'"))
+                      .replaceAll('%ACCTOKEN%', (auth.accessToken ?? '').replaceAll("'", "\\'"))
+                      .replaceAll('%CODE%', (account.serverAuthCode ?? '').replaceAll("'", "\\'"))
+                      .replaceAll('%EMAIL%', account.email.replaceAll("'", "\\'"));
+                    await _inAppController?.evaluateJavascript(source: jsTpl);
+                    await _inAppController?.evaluateJavascript(source: "try { window.APP2TI && window.APP2TI.giveApiToken('${(auth.idToken ?? '').replaceAll("'", "\\'")}', '${account.email.replaceAll("'", "\\'")}'); } catch(e){ console.error('APP2TI.giveApiToken failed', e); }");
+                  }
+                } catch (e) {
+                  try { await _inAppController?.evaluateJavascript(source: "try{ console.error('native google sign-in error', '${e.toString().replaceAll("'", "\\'")}'); }catch(_){}"); } catch(_) {}
+                }
+              });
+              return JsPromptResponse(handledByClient: true, action: JsPromptResponseAction.CONFIRM, value: 'ok');
+            }
+            if (jsPromptRequest.message == 'facebook_native_signin') {
+              // Do not block the JS prompt; run sign-in asynchronously
+              Future.microtask(() async {
+                try {
+                  await FacebookAuth.instance.logOut();
+                  final res = await FacebookAuth.instance.login(permissions: ['email','public_profile']);
+                  if (res.status == LoginStatus.success && res.accessToken != null) {
+                    final atJson = res.accessToken!.toJson();
+                    final token = (atJson['token'] ?? atJson['tokenString'] ?? '').toString();
+                    final userId = (atJson['userId'] ?? atJson['userID'] ?? '').toString();
+                    int? expiresIn;
+                    try {
+                      final ex = atJson['expires'];
+                      if (ex is String) {
+                        final dt = DateTime.tryParse(ex);
+                        if (dt != null) { expiresIn = ((dt.millisecondsSinceEpoch - DateTime.now().millisecondsSinceEpoch) ~/ 1000); }
+                      } else if (ex is int) {
+                        expiresIn = ((ex - DateTime.now().millisecondsSinceEpoch) ~/ 1000);
+                      }
+                    } catch (_) {}
+                    await _inAppController?.evaluateJavascript(source: """
+                      try {
+                        window.dispatchEvent(new CustomEvent('flutter_facebook_tokens', { detail: { accessToken: '${token.replaceAll("'", "\\'")}', userId: '${userId.replaceAll("'", "\\'")}', expiresIn: ${expiresIn ?? 'null'} } }));
+                        if (window.onFlutterFacebookSignIn) { try { window.onFlutterFacebookSignIn({ accessToken: '${token.replaceAll("'", "\\'")}', userId: '${userId.replaceAll("'", "\\'")}', expiresIn: ${expiresIn ?? 'null'} }); } catch(e){} }
+                      } catch(e) { console.error('FB tokens dispatch error', e); }
+                    """);
+                  } else {
+                    debugPrint('FB native sign-in failed: status=${res.status} message=${res.message}');
+                    await _inAppController?.evaluateJavascript(source: """
+                      try {
+                        window.dispatchEvent(new CustomEvent('flutter_facebook_error', { detail: { status: '${res.status}', message: ${jsonEncode(res.message ?? '')} } }));
+                      } catch(e) { console.error('FB error dispatch failed', e); }
+                    """);
+                  }
+                } catch (e) {
+                  debugPrint('FB native sign-in exception: ' + e.toString());
+                  try { await _inAppController?.evaluateJavascript(source: "try{ console.error('native facebook sign-in error', '${e.toString().replaceAll("'", "\\'")}'); }catch(_){}"); } catch(_) {}
+                }
+              });
               return JsPromptResponse(handledByClient: true, action: JsPromptResponseAction.CONFIRM, value: 'ok');
             }
             return JsPromptResponse(handledByClient: false);
