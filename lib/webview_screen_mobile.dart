@@ -9,6 +9,7 @@ import 'firebase_messaging_service.dart';
 import 'package:flutter/foundation.dart'; // for kDebugMode
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/services.dart';
 
 class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key});
@@ -534,8 +535,45 @@ class _WebViewScreenState extends State<WebViewScreen> {
       debugPrint('FPK: _handleFilePicker() start');
       final ImagePicker picker = ImagePicker();
       
-      // Show options: Camera or Gallery
-      final result = await showDialog<String>(
+      // Probe the current <input type=file> for capture/accept hints
+      String? metaStr;
+      try {
+        metaStr = await _inAppController?.evaluateJavascript(source: "(function(){try{var i=window.currentFileInput; if(!i) return '{}'; return JSON.stringify({accept:(i.accept||''), capture:(i.getAttribute&&i.getAttribute('capture'))||'', multiple:!!i.multiple, host:location.host||'', href:location.href||''});}catch(e){return '{}';}})()");
+      } catch (e) { debugPrint('FPK: meta probe error: ' + e.toString()); }
+      String accept = '';
+      String capture = '';
+      bool multiple = false;
+      String host = '';
+      String href = '';
+      try {
+        if (metaStr != null && metaStr.isNotEmpty && metaStr != 'null') {
+          final m = jsonDecode(metaStr);
+          accept = (m['accept'] ?? '').toString();
+          capture = (m['capture'] ?? '').toString();
+          multiple = (m['multiple'] ?? false) == true;
+          host = (m['host'] ?? '').toString();
+          href = (m['href'] ?? '').toString();
+        }
+      } catch (e) { debugPrint('FPK: meta parse error: ' + e.toString()); }
+      final lowerAccept = accept.toLowerCase();
+      final lowerCapture = capture.toLowerCase();
+      final lowerHost = host.toLowerCase();
+      bool forceCamera = false;
+      // Heuristics: if capture attr present or accept hints camera-only, force camera
+      if (lowerCapture.isNotEmpty && lowerCapture != 'none') {
+        forceCamera = true;
+      } else if (lowerAccept.contains('image') && !multiple) {
+        // any image mime(s) with single selection implies camera intent for our apps
+        forceCamera = true;
+      } else if ((lowerHost.endsWith('2take.it') || lowerHost.endsWith('.2take.it')) && !multiple) {
+        // product requirement: prefer camera on these hosts
+        forceCamera = true;
+      }
+      debugPrint('FPK: meta host=' + host + ' href=' + href + ' accept=' + accept + ' capture=' + capture + ' multiple=' + multiple.toString() + ' forceCamera=' + forceCamera.toString());
+      
+      // Show options: Camera or Gallery (always show; was skipping when forceCamera)
+      debugPrint('FPK: showing chooser dialog');
+      String? result = await showDialog<String>(
         context: context,
         builder: (BuildContext context) {
           final isPl = Localizations.localeOf(context).languageCode.toLowerCase().startsWith('pl');
@@ -594,74 +632,43 @@ class _WebViewScreenState extends State<WebViewScreen> {
         final XFile? image;
         if (result == 'camera') {
           debugPrint('FPK: launching camera');
-          image = await picker.pickImage(source: ImageSource.camera, imageQuality: 70, maxWidth: 1600, maxHeight: 1600);
+          try {
+            image = await picker.pickImage(source: ImageSource.camera, preferredCameraDevice: CameraDevice.rear, imageQuality: 70, maxWidth: 1600, maxHeight: 1600);
+          } catch (e) {
+            debugPrint('FPK: camera error => ' + e.toString());
+            return; // do not open gallery fallback on camera error
+          }
+          if (image == null) {
+            debugPrint('FPK: camera cancelled or no image');
+            return; // user cancelled camera; do nothing
+          }
         } else {
           debugPrint('FPK: opening gallery');
           image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 1600, maxHeight: 1600);
         }
         debugPrint('FPK: picker returned => ' + (image?.name ?? 'null'));
-
+        
         if (image != null) {
-          // Convert image to base64 and send back to web app
-          final bytes = await image.readAsBytes();
-          final base64Payload = base64Encode(bytes);
-          debugPrint('FPK: bytes=' + bytes.length.toString() + ' base64Len=' + base64Payload.length.toString());
-
-          // Extra diagnostics: current page URL and bridge state
-          try {
-            final currentUrl = await _inAppController?.getUrl();
-            debugPrint('FPK: page url=' + (currentUrl?.toString() ?? 'null'));
-          } catch (e) { debugPrint('FPK: getUrl error: ' + e.toString()); }
-          try {
-            final probe = await _inAppController?.evaluateJavascript(source: '''(function(){try{return JSON.stringify({
-              href: location.href,
-              vis: document.visibilityState,
-              ready: document.readyState,
-              hasPoller: !!window.__flutterImagePollerInstalled,
-              hasDispatch: (typeof __dispatchFlutterImage),
-              handlers: (window.__flutterFileSelectedHandlers||0),
-              hasOnResult: (typeof window.onFlutterScanResult),
-              hasHostApp: (typeof window.HostApp),
-              hasFlutterPostMessage: !!(window.Flutter && window.Flutter.postMessage)
-            });}catch(e){return 'ERR:'+e;}})()''');
-            debugPrint('FPK: page probe => ' + (probe?.toString() ?? 'null'));
-          } catch (e) { debugPrint('FPK: page probe error: ' + e.toString()); }
-
-          const mime = 'image/jpeg';
-          final dataUrl = 'data:$mime;base64,' + base64Payload;
-          debugPrint('FPK: dataUrl length=' + dataUrl.length.toString());
-          _pendingImageDataUrl = null; // do not cache for poller; avoid reuse
-
-          // Longer wait to ensure WebView fully resumes after picker
-          await Future.delayed(const Duration(milliseconds: 1600));
-
-          // Log controller state and attempt resilient dispatch via JS function with retries
-          debugPrint('FPK: controller is ' + (_inAppController == null ? 'null' : 'ready'));
-          // Single dispatch only; no retries
-          try {
-            final js = "try { console.log('🟢 CALL __dispatchFlutterImage'); (typeof __dispatchFlutterImage==='function') && __dispatchFlutterImage(${jsonEncode(dataUrl)}, ${jsonEncode(image.name)}); 'ok'; } catch(e) { console.log('⚠️ __dispatchFlutterImage call error', e); 'err'; }";
-            final res = await _inAppController?.evaluateJavascript(source: js);
-            debugPrint('FPK: __dispatchFlutterImage res=' + (res?.toString() ?? 'null'));
-            try { await _inAppController?.evaluateJavascript(source: "try { window.__lastFlutterImage = undefined; } catch(e){}"); } catch (_) {}
-          } catch (e) {
-            debugPrint('FPK: __dispatchFlutterImage eval error: ' + e.toString());
-          }
-
-          // Give WebView a bit more time after dispatch attempts
-          await Future.delayed(const Duration(milliseconds: 600));
-          try {
-            await _inAppController?.evaluateJavascript(source: "try { console.log('DBG visibility=', document.visibilityState, 'handlers=', (window.__flutterFileSelectedHandlers||0)); } catch(e) { console.log('DBG tracker missing', e); }");
-          } catch (_) {}
-
-          // Done
-          debugPrint('FPK: dispatch finished');
-        } else {
-          debugPrint('FPK: picker returned null');
+          await _dispatchPickedImage(image);
         }
       } else {
         debugPrint('FPK: dialog cancelled');
       }
     } catch (e) {}
+  }
+  
+  Future<void> _dispatchPickedImage(XFile picked) async {
+    try {
+      final bytes = await picked.readAsBytes();
+      final b64 = base64Encode(bytes);
+      final name = picked.name.isNotEmpty ? picked.name : 'photo_' + DateTime.now().millisecondsSinceEpoch.toString() + '.jpg';
+      final dataUrl = 'data:image/jpeg;base64,' + b64;
+      final escData = dataUrl.replaceAll('\\', r'\\').replaceAll("'", r"\'");
+      final escName = name.replaceAll('\\', r'\\').replaceAll("'", r"\'");
+      await _inAppController?.evaluateJavascript(source: "try { window.__dispatchFlutterImage('" + escData + "', '" + escName + "'); } catch(e) { try { window.dispatchEvent(new CustomEvent('flutter_file_selected', { detail: { fileName: '" + escName + "', fileData: '" + escData + "' } })); } catch(_) {} }");
+    } catch (e) {
+      debugPrint('FPK: dispatch error => ' + e.toString());
+    }
   }
 
   @override
@@ -1064,6 +1071,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
               source: '''
                 (function(){
                   try {
+                    console.log('✅ File input intercept installed');
                     // Intercept file input programmatic/native openings
                     var HTMLInputProto = window.HTMLInputElement && window.HTMLInputElement.prototype;
                     if (HTMLInputProto) {
@@ -1073,6 +1081,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           try {
                             if (this && String(this.type).toLowerCase() === 'file') {
                               window.currentFileInput = this;
+                              try { console.log('[FPK-JS] click() on file input accept=', this.accept, ' capture=', this.getAttribute && this.getAttribute('capture'), ' multiple=', !!this.multiple); } catch(_) {}
                               try { window.Flutter && window.Flutter.postMessage && window.Flutter.postMessage('file_picker_request'); } catch(_) {}
                               return; // swallow native chooser
                             }
@@ -1086,6 +1095,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           try {
                             if (this && String(this.type).toLowerCase() === 'file') {
                               window.currentFileInput = this;
+                              try { console.log('[FPK-JS] showPicker() on file input accept=', this.accept, ' capture=', this.getAttribute && this.getAttribute('capture'), ' multiple=', !!this.multiple); } catch(_) {}
                               try { window.Flutter && window.Flutter.postMessage && window.Flutter.postMessage('file_picker_request'); } catch(_) {}
                               return; // swallow native chooser
                             }
@@ -1094,6 +1104,18 @@ class _WebViewScreenState extends State<WebViewScreen> {
                         };
                       }
                     }
+                    // Direct tap on input[type=file]
+                    document.addEventListener('click', function(e){
+                      try {
+                        var inp = e.target && e.target.closest ? e.target.closest('input[type="file"]') : null;
+                        if (inp && String(inp.type).toLowerCase() === 'file') {
+                          e.preventDefault(); e.stopPropagation();
+                          window.currentFileInput = inp;
+                          try { console.log('[FPK-JS] direct input click accept=', inp.accept, ' capture=', inp.getAttribute && inp.getAttribute('capture'), ' multiple=', !!inp.multiple); } catch(_) {}
+                          try { window.Flutter && window.Flutter.postMessage && window.Flutter.postMessage('file_picker_request'); } catch(_) {}
+                        }
+                      } catch(_) {}
+                    }, true);
                     // Capture label clicks that target file inputs
                     document.addEventListener('click', function(e){
                       try {
@@ -1104,15 +1126,32 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           if (inp && String(inp.type).toLowerCase() === 'file') {
                             e.preventDefault(); e.stopPropagation();
                             window.currentFileInput = inp;
+                            try { console.log('[FPK-JS] label click -> input accept=', inp.accept, ' capture=', inp.getAttribute && inp.getAttribute('capture'), ' multiple=', !!inp.multiple); } catch(_) {}
                             try { window.Flutter && window.Flutter.postMessage && window.Flutter.postMessage('file_picker_request'); } catch(_) {}
                           }
                         }
                       } catch(_) {}
                     }, true);
+                    // Observe inputs becoming type=file to log attributes
+                    try {
+                      var mo = new MutationObserver(function(muts){
+                        muts.forEach(function(m){
+                          if (m.type === 'attributes' && m.attributeName === 'type') {
+                            var t = m.target; try {
+                              if (t && String(t.type).toLowerCase() === 'file') {
+                                console.log('[FPK-JS] mutated to type=file accept=', t.accept, ' capture=', t.getAttribute && t.getAttribute('capture'), ' multiple=', !!t.multiple);
+                              }
+                            } catch(_) {}
+                          }
+                        });
+                      });
+                      mo.observe(document.documentElement||document.body, {subtree:true, attributes:true, attributeFilter:['type']});
+                    } catch(_) {}
                   } catch (e) { console.error('⚠️ file input intercept failed', e); }
                 })();
               ''',
               injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+              forMainFrameOnly: false,
             ),
             UserScript(
               source: '''
@@ -1372,6 +1411,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           try {
                             if (this && String(this.type).toLowerCase() === 'file') {
                               window.currentFileInput = this;
+                              try {
+                                console.log('[FPK-JS] click on file input accept=', this.accept, ' capture=', this.getAttribute && this.getAttribute('capture'), ' multiple=', !!this.multiple);
+                              } catch(_) {}
                               try { window.Flutter && window.Flutter.postMessage && window.Flutter.postMessage('file_picker_request'); } catch(_) {}
                               return; // swallow native chooser
                             }
@@ -1385,6 +1427,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           try {
                             if (this && String(this.type).toLowerCase() === 'file') {
                               window.currentFileInput = this;
+                              try {
+                                console.log('[FPK-JS] showPicker on file input accept=', this.accept, ' capture=', this.getAttribute && this.getAttribute('capture'), ' multiple=', !!this.multiple);
+                              } catch(_) {}
                               try { window.Flutter && window.Flutter.postMessage && window.Flutter.postMessage('file_picker_request'); } catch(_) {}
                               return; // swallow native chooser
                             }
@@ -1403,11 +1448,27 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           if (inp && String(inp.type).toLowerCase() === 'file') {
                             e.preventDefault(); e.stopPropagation();
                             window.currentFileInput = inp;
+                            try { console.log('[FPK-JS] label click -> input accept=', inp.accept, ' capture=', inp.getAttribute && inp.getAttribute('capture'), ' multiple=', !!inp.multiple); } catch(_) {}
                             try { window.Flutter && window.Flutter.postMessage && window.Flutter.postMessage('file_picker_request'); } catch(_) {}
                           }
                         }
                       } catch(_) {}
                     }, true);
+                    // Observe inputs becoming type=file to log attributes
+                    try {
+                      var mo = new MutationObserver(function(muts){
+                        muts.forEach(function(m){
+                          if (m.type === 'attributes' && m.attributeName === 'type') {
+                            var t = m.target; try {
+                              if (t && String(t.type).toLowerCase() === 'file') {
+                                console.log('[FPK-JS] mutated to type=file accept=', t.accept, ' capture=', t.getAttribute && t.getAttribute('capture'), ' multiple=', !!t.multiple);
+                              }
+                            } catch(_) {}
+                          }
+                        });
+                      });
+                      mo.observe(document.documentElement||document.body, {subtree:true, attributes:true, attributeFilter:['type']});
+                    } catch(_) {}
                   } catch (e) { console.error('⚠️ file input intercept failed', e); }
                 })();
               ''',
@@ -1492,6 +1553,102 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       return true;
                     } catch(e) { console.error('onFlutterFacebookLogin error', e); return false; }
                   };
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+              forMainFrameOnly: false,
+            ),
+            UserScript(
+              source: '''
+                (function(){
+                  try {
+                    var host = String(location.host || '').toLowerCase();
+                    if (!/\.?(2take\.it|2take\.dev)/.test(host)) return;
+                    function forceAttrs(inp){
+                      try {
+                        if (!inp || String(inp.type).toLowerCase() !== 'file') return;
+                        inp.setAttribute('accept','image/*');
+                        inp.setAttribute('capture','camera');
+                        try { inp.multiple = false; } catch(_) {}
+                      } catch(_) {}
+                    }
+                    Array.prototype.forEach.call(document.querySelectorAll('input[type="file"]'), forceAttrs);
+                    var mo = new MutationObserver(function(muts){
+                      try {
+                        muts.forEach(function(m){
+                          if (m.type === 'childList') {
+                            (m.addedNodes||[]).forEach(function(n){
+                              try {
+                                if (n && n.querySelectorAll) {
+                                  Array.prototype.forEach.call(n.querySelectorAll('input[type="file"]'), forceAttrs);
+                                } else if (n && n.nodeName && String(n.nodeName).toLowerCase() === 'input') {
+                                  if (String(n.type).toLowerCase() === 'file') forceAttrs(n);
+                                }
+                              } catch(_) {}
+                            });
+                          } else if (m.type === 'attributes') {
+                            try { if (m.target && m.attributeName === 'type' && String(m.target.type).toLowerCase() === 'file') forceAttrs(m.target); } catch(_) {}
+                          }
+                        });
+                      } catch(_) {}
+                    });
+                    mo.observe(document.documentElement || document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['type'] });
+                    console.log('✅ Forced capture=camera on 2take.it');
+                  } catch(e) { console.error('⚠️ force camera attrs failed', e); }
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+              forMainFrameOnly: false,
+            ),
+            UserScript(
+              source: r'''
+                (function(){
+                  try {
+                    function dataUrlToBlob(dataUrl){
+                      try {
+                        var parts = String(dataUrl||'').split(',');
+                        var meta = parts[0]||''; var b64 = parts[1]||'';
+                        var match = /data:(.*?);base64/.exec(meta); var mime = match ? match[1] : 'image/jpeg';
+                        var bin = atob(b64); var len = bin.length; var arr = new Uint8Array(len);
+                        for (var i=0;i<len;i++){ arr[i] = bin.charCodeAt(i); }
+                        return new Blob([arr], {type: mime});
+                      } catch(e){ console.error('[FPK-JS] dataUrlToBlob failed', e); return null; }
+                    }
+                    window.addEventListener('flutter_file_selected', function(ev){
+                      try {
+                        var d = ev && ev.detail || {};
+                        console.log('[FPK-JS] flutter_file_selected received name=', d.fileName, ' size=', (d.fileData||'').length);
+                        var inp = window.currentFileInput;
+                        if (!inp || String(inp.type).toLowerCase() !== 'file') { console.warn('[FPK-JS] no currentFileInput to populate'); return; }
+                        var blob = dataUrlToBlob(d.fileData);
+                        if (!blob) return;
+                        var file;
+                        try { file = new File([blob], String(d.fileName||'photo.jpg'), {type: blob.type}); } catch(_){ file = blob; file.name = String(d.fileName||'photo.jpg'); }
+                        // Show site's progress bar
+                        try {
+                          if (window.$ && window.$2TI && $2TI.BILL_PROGRESSBAR_WRAPPER_SELECTOR) {
+                            window.$($2TI.BILL_PROGRESSBAR_WRAPPER_SELECTOR).stop(true,true).fadeIn(300);
+                            if ($2TI.BILL_PROGRESSBAR_ELEMENT_SELECTOR) { window.$($2TI.BILL_PROGRESSBAR_ELEMENT_SELECTOR).css('width','10%'); }
+                            try { window.dispatchEvent(new CustomEvent('startspinner')); } catch(_) {}
+                          }
+                        } catch(_) {}
+                        // Use DataTransfer to set files
+                        try {
+                          var dt = new DataTransfer();
+                          dt.items.add(file);
+                          inp.files = dt.files;
+                          // Fire events to notify frameworks
+                          var ev1 = new Event('input', {bubbles:true, composed:true});
+                          var ev2 = new Event('change', {bubbles:true, composed:true});
+                          inp.dispatchEvent(ev1);
+                          inp.dispatchEvent(ev2);
+                          console.log('[FPK-JS] populated input.files and dispatched change');
+                        } catch(e){
+                          console.error('[FPK-JS] populate input.files failed', e);
+                        }
+                      } catch(e){ console.error('[FPK-JS] flutter_file_selected handler error', e); }
+                    }, true);
+                  } catch(e) { console.error('[FPK-JS] install populate handler failed', e); }
                 })();
               ''',
               injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
