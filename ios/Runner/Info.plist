@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -20,10 +22,52 @@
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fb683312195062841</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.159120615271-9bm2apos0nn46hk1n56vlm611raqc1fb</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>FacebookAppID</key>
+	<string>683312195062841</string>
+	<key>FacebookClientToken</key>
+	<string>287981d5a80b70d2d89de443c84a8fe8</string>
+	<key>FacebookDisplayName</key>
+	<string>skanuj_wygrywaj</string>
+	<key>GIDClientID</key>
+	<string>159120615271-9bm2apos0nn46hk1n56vlm611raqc1fb.apps.googleusercontent.com</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>fbapi</string>
+		<string>fbauth2</string>
+		<string>fb-messenger-share-api</string>
+		<string>fbshareextension</string>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Camera access is needed to scan codes and take photos.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Microphone access is needed for video capture.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photo library access is needed to pick images.</string>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -41,48 +85,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>CADisableMinimumFrameDurationOnPhone</key>
-	<true/>
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
-	<!--Google auth-->
-	<key>GIDClientID</key>
-	<string>159120615271-9bm2apos0nn46hk1n56vlm611raqc1fb.apps.googleusercontent.com</string>
-	<key>CFBundleURLTypes</key>
-<array>
-  <dict>
-    <key>CFBundleURLSchemes</key>
-    <array>
-      <string>fb683312195062841</string>
-    </array>
-  </dict>
-  <dict>
-    <key>CFBundleURLSchemes</key>
-    <array>
-      <string>com.googleusercontent.apps.159120615271-9bm2apos0nn46hk1n56vlm611raqc1fb</string>
-    </array>
-  </dict>
-</array>
-	<!-- Facebook iOS configuration -->
-	<key>FacebookAppID</key>
-	<string>683312195062841</string>
-	<key>FacebookDisplayName</key>
-	<string>skanuj_wygrywaj</string>
-	<key>LSApplicationQueriesSchemes</key>
-	<array>
-		<string>fbapi</string>
-		<string>fbauth2</string>
-		<string>fb-messenger-share-api</string>
-		<string>fbshareextension</string>
-	</array>
-	<key>FacebookClientToken</key>
-	<string>287981d5a80b70d2d89de443c84a8fe8</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Camera access is needed to scan codes and take photos.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Photo library access is needed to pick images.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Microphone access is needed for video capture.</string>
-
 </dict>
 </plist>

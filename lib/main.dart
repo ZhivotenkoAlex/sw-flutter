@@ -1,13 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'webview_screen.dart';
 import 'firebase_messaging_service.dart';
+
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Required for iOS/macOS background isolates
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp();
+  } catch (_) {}
+  try {
+    final title = message.notification?.title ?? '';
+    final body = message.notification?.body ?? '';
+    // Keep logs minimal but useful for debugging background delivery
+    // Do not add heavy work here; offload to the app after resume/open
+    // iOS background "data" pushes require content-available=1 from server
+    // to reach this handler when the app is not in foreground
+    // ignore: avoid_print
+    print('[FCM][bg] title="$title" body="$body" data=${message.data}');
+  } catch (_) {}
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Only initialize Firebase on mobile platforms
   if (!kIsWeb) {
+    // Register background handler early for iOS/macOS/Android background messages
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     try {
       await FirebaseMessagingService.initialize();
       FirebaseMessagingService.configureApi(

@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>159120615271-9bm2apos0nn46hk1n56vlm611raqc1fb.apps.googleusercontent.com</string>
+	<string>159120615271-5i5pom60tevv032bppgcletg3h7d8gc6.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.159120615271-9bm2apos0nn46hk1n56vlm611raqc1fb</string>
+	<string>com.googleusercontent.apps.159120615271-5i5pom60tevv032bppgcletg3h7d8gc6</string>
 	<key>ANDROID_CLIENT_ID</key>
-	<string>159120615271-0rhho02ueeog8ehbefjuls7ahg4o5b69.apps.googleusercontent.com</string>
+	<string>159120615271-0emcq3n0glpdcdqnm2g0h2jm7j9fobf4.apps.googleusercontent.com</string>
 	<key>API_KEY</key>
 	<string>AIzaSyDxIO20bhKa3y5YLfcuZtv2b5qxaPSW_NM</string>
 	<key>GCM_SENDER_ID</key>
@@ -15,7 +15,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.skanujwygrywaj.skanujWygrywaj</string>
+	<string>com.skanujwygrywaj.galeriakazimierz</string>
 	<key>PROJECT_ID</key>
 	<string>development-417611</string>
 	<key>STORAGE_BUCKET</key>
@@ -31,7 +31,7 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:159120615271:ios:2ba734d4e96baccf74f1c2</string>
+	<string>1:159120615271:ios:523982de596dc4aa74f1c2</string>
 	<key>DATABASE_URL</key>
 	<string>https://development-417611-default-rtdb.firebaseio.com</string>
 </dict>

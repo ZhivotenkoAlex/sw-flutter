@@ -12,11 +12,16 @@ class FirebaseMessagingService {
   static String? _currentCompany;
   static String? _lastSentToken;
   static Map<String, String>? _currentExtra;
+  // 2take.it loyalty integration (form-encoded)
+  static final TwoTakeLoyaltyPushClient _loyalty = TwoTakeLoyaltyPushClient();
+  static String? _loyaltyCompany;
+  static String? _loyaltyUid;
 
   static Future<void> initialize() async {
     try {
       print('[FCM] initialize() start');
       await Firebase.initializeApp();
+      try { print('[FCM] projectId=' + (Firebase.app().options.projectId ?? '-')); } catch (_) {}
       await FirebaseMessaging.instance.setAutoInitEnabled(true);
       // Proactively ensure permission at startup, but only if not decided yet
       await _ensurePermissionIfNeeded();
@@ -30,15 +35,28 @@ class FirebaseMessagingService {
         _fcmToken = newToken;
         print('[FCM] onTokenRefresh -> ' + (newToken));
         await _autoUpsertIfPossible();
+        await _autoRegister2TakeIfPossible();
       });
 
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {});
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        try {
+          final title = message.notification?.title ?? '';
+          final body = message.notification?.body ?? '';
+          print('[FCM] onMessage title="' + title + '" body="' + body + '" data=' + message.data.toString());
+        } catch (_) {}
+      });
 
-      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {});
+      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+        try {
+          final click = message.data['click_action'] ?? message.notification?.android?.clickAction ?? '';
+          print('[FCM] onMessageOpenedApp click="' + click + '" data=' + message.data.toString());
+        } catch (_) {}
+      });
 
       _initialized = true;
       // Try an initial upsert if we already know the user
       await _autoUpsertIfPossible();
+      await _autoRegister2TakeIfPossible();
       print('[FCM] initialize() done');
     } catch (_) { _initialized = true; }
   }
@@ -74,7 +92,8 @@ class FirebaseMessagingService {
         }
         return true;
       }
-      if (status == AuthorizationStatus.notDetermined) {
+      // On Android 13+, it's valid to ask again when denied. On iOS, the OS blocks re-prompts once denied.
+      if (status == AuthorizationStatus.notDetermined || (Platform.isAndroid && status == AuthorizationStatus.denied)) {
         final perm = await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);
         final ok = perm.authorizationStatus == AuthorizationStatus.authorized || perm.authorizationStatus == AuthorizationStatus.provisional;
         if (Platform.isIOS) {
@@ -90,6 +109,21 @@ class FirebaseMessagingService {
     }
   }
 
+  // Public helper: explicitly request notification permission (useful for a settings screen button)
+  static Future<AuthorizationStatus> requestNotificationsPermission() async {
+    try {
+      final result = await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);
+      print('[FCM] requestPermission -> ' + result.authorizationStatus.toString());
+      if (Platform.isIOS) {
+        try { final apns = await FirebaseMessaging.instance.getAPNSToken(); print('[FCM] APNs token (post-request explicit): ' + (apns ?? 'null')); } catch (e) { print('[FCM] getAPNSToken error: ' + e.toString()); }
+      }
+      return result.authorizationStatus;
+    } catch (e) {
+      print('[FCM] requestNotificationsPermission error: ' + e.toString());
+      return AuthorizationStatus.denied;
+    }
+  }
+
   static Future<void> _autoUpsertIfPossible() async {
     if (_api == null) { print('[FCM] skip upsert: api not configured'); return; }
     if (_currentUserId == null) { print('[FCM] skip upsert: user not set'); return; }
@@ -100,12 +134,40 @@ class FirebaseMessagingService {
       userId: _currentUserId!,
       token: token,
       platform: Platform.isAndroid ? 'android' : (Platform.isIOS ? 'ios' : 'unknown'),
-      appId: Platform.isAndroid ? 'com.skanujwygrywaj.skanuj_wygrywaj' : 'com.skanujwygrywaj.skanujWygrywaj',
+      appId: Platform.isAndroid ? 'pl.a2ti.galeriakazimierz' : 'com.skanujwygrywaj.skanujWygrywaj',
       company: _currentCompany,
       extra: _currentExtra,
     );
     _lastSentToken = token;
     print('[FCM] upsert done for user=' + (_currentUserId ?? '-') + ' tokenLen=' + token.length.toString());
+  }
+
+  // ---------- 2take.it helpers -------------------------------------------
+  static Future<void> register2TakeToken({required String company, String? uid}) async {
+    _loyaltyCompany = company;
+    _loyaltyUid = uid;
+    final token = await _awaitFcmToken();
+    print('[2TAKE] register2TakeToken company=' + company + ' uid=' + (uid ?? '-') + ' tokenLen=' + ((token ?? '').length).toString());
+    if (token == null || token.isEmpty) return;
+    await _loyalty.saveToken(company: company, uid: uid, token: token);
+  }
+
+  static Future<void> register2TakeTokenWith({required String company, String? uid, required String token}) async {
+    _loyaltyCompany = company;
+    _loyaltyUid = uid;
+    _fcmToken ??= token;
+    print('[2TAKE] register2TakeTokenWith company=' + company + ' uid=' + (uid ?? '-') + ' tokenLen=' + token.length.toString());
+    await _loyalty.saveToken(company: company, uid: uid, token: token);
+    _lastSentToken = token;
+  }
+
+  static Future<void> _autoRegister2TakeIfPossible() async {
+    if (_loyaltyCompany == null) { print('[2TAKE] skip: company not set'); return; }
+    final token = await _awaitFcmToken();
+    if (token == null || token.isEmpty) { print('[2TAKE] skip: no token'); return; }
+    if (_lastSentToken == token) { print('[2TAKE] skip: same token'); return; }
+    await _loyalty.saveToken(company: _loyaltyCompany!, uid: _loyaltyUid, token: token);
+    _lastSentToken = token;
   }
 
   static void setLoggedInUser(String userId, {String? company, Map<String, String>? extra}) {
@@ -115,6 +177,7 @@ class FirebaseMessagingService {
     print('[FCM] setLoggedInUser user=' + userId + ' company=' + (company ?? '-'));
     // Fire and forget
     _autoUpsertIfPossible();
+    _autoRegister2TakeIfPossible();
   }
 
   static void configureApi({
@@ -166,7 +229,7 @@ class FirebaseMessagingService {
       userId: userId,
       token: token,
       platform: Platform.isAndroid ? 'android' : (Platform.isIOS ? 'ios' : 'unknown'),
-      appId: Platform.isAndroid ? 'com.skanujwygrywaj.skanuj_wygrywaj' : 'com.skanujwygrywaj.skanujWygrywaj',
+      appId: Platform.isAndroid ? 'pl.a2ti.galeriakazimierz' : 'com.skanujwygrywaj.skanujWygrywaj',
       company: company,
       extra: extra,
     );
@@ -188,6 +251,38 @@ class FirebaseMessagingService {
   }) async {
     if (_api == null) return {'error': 'api_not_configured'};
     return _api!.sendTestMessage(userId: userId, title: title, message: message, company: company);
+  }
+}
+
+// 2take.it loyalty client (form-encoded endpoints on https://2take.it)
+class TwoTakeLoyaltyPushClient {
+  Future<void> saveToken({
+    required String company,
+    String? uid,
+    required String token,
+  }) async {
+    final bool isGuest = uid == null || uid.isEmpty;
+    final String url = isGuest
+        ? 'https://2take.it/loyalty/index.php/site/pushtokensaveguest/c/' + company
+        : 'https://2take.it/loyalty/index.php/site/pushtokensave/c/' + company;
+    final Map<String, String> body = isGuest ? {'token': token} : {'uid': uid!, 'token': token};
+    final uri = Uri.parse(url);
+    print('[2TAKE] POST ' + url + ' body=' + body.toString());
+    final resp = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: body,
+    );
+    print('[2TAKE] status=' + resp.statusCode.toString() + ' len=' + resp.body.length.toString());
+    try {
+      final String b = resp.body;
+      final String snippet = b.length > 400 ? (b.substring(0, 400) + '…') : b;
+      print('[2TAKE] body=' + snippet);
+    } catch (_) {}
+    if (resp.statusCode >= 300) {
+      print('[2TAKE] ERROR body=' + resp.body);
+      throw Exception('loyalty save failed: ' + resp.statusCode.toString());
+    }
   }
 }
 
@@ -274,4 +369,4 @@ class NotificationsApiClient {
     final resp = await http.post(url, headers: defaultHeaders, body: jsonEncode(body));
     return {'status': resp.statusCode, 'body': resp.body};
   }
-}
+} 

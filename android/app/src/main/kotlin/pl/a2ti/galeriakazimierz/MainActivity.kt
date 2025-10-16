@@ -1,4 +1,4 @@
-package com.skanujwygrywaj.skanuj_wygrywaj
+package pl.a2ti.galeriakazimierz
 
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterFragmentActivity
@@ -11,7 +11,7 @@ import com.facebook.FacebookException
 import com.facebook.CallbackManager
 import com.facebook.FacebookSdk
 import com.facebook.appevents.AppEventsLogger
-import com.skanujwygrywaj.skanuj_wygrywaj.R
+import pl.a2ti.galeriakazimierz.R
 import android.util.Log
 
 class MainActivity : FlutterFragmentActivity() {

@@ -449,14 +449,25 @@ class _WebViewScreenState extends State<WebViewScreen> {
           };
           
           // Firebase config that matches the service worker
-          const firebaseConfig = {
-            apiKey: "AIzaSyDTaBY5QfDbPXdQGVYIVifdCsbqF4Ed98A",
-            authDomain: "development-417611.firebaseapp.com",
-            projectId: "development-417611",
-            storageBucket: "development-417611.firebasestorage.app",
-            messagingSenderId: "159120615271",
-            appId: "1:159120615271:web:5eab7cf9ecedc12a74f1c2"
-          };
+          // const firebaseConfig = {
+          //   apiKey: "AIzaSyDTaBY5QfDbPXdQGVYIVifdCsbqF4Ed98A",
+          //   authDomain: "development-417611.firebaseapp.com",
+          //   projectId: "development-417611",
+          //   storageBucket: "development-417611.firebasestorage.app",
+          //   messagingSenderId: "159120615271",
+          //   appId: "1:159120615271:web:5eab7cf9ecedc12a74f1c2"
+          // };
+
+              const firebaseConfig = {
+                apiKey: "AIzaSyBXKJg9G1gk8gS1v0Q4w9fLUU3l3G5E3C0",
+                authDomain: "newagent-ctokxh.firebaseapp.com",
+                databaseURL: "https://newagent-ctokxh.firebaseio.com",
+                projectId: "newagent-ctokxh",
+                storageBucket: "newagent-ctokxh.appspot.com",
+                messagingSenderId: "592596864276",
+                appId: "1:592596864276:web:200106eb3c0597e78c4601",
+                measurementId: "G-PM23BW4DES"
+            };
           
           // Override Firebase BEFORE it loads
           window.firebaseConfig = firebaseConfig;
@@ -1658,9 +1669,24 @@ class _WebViewScreenState extends State<WebViewScreen> {
           onWebViewCreated: (controller) async {
             _inAppController = controller;
             _googleSignIn = GoogleSignIn(
-              serverClientId: '159120615271-80ftbidbjk2a75idsuuqu8tklbu9fugb.apps.googleusercontent.com',
+              // Web client ID from current google-services.json (project 839029981684)
+              serverClientId: '839029981684-v8su4cmc72t498k2evmejnohi0pk7v3c.apps.googleusercontent.com',
               scopes: ['email', 'profile'],
             );
+            // Attempt an early guest token register using the company from URL
+            try {
+              final currentUrl = await _inAppController?.getUrl();
+              final urlStr = currentUrl?.toString() ?? '';
+              final uri = Uri.tryParse(urlStr);
+              final company = uri?.queryParameters['company_name'];
+              if ((company != null) && company.isNotEmpty) {
+                debugPrint('[WEBVIEW] early guest register company=' + company);
+                await FirebaseMessagingService.register2TakeToken(company: company, uid: null);
+              } else {
+                debugPrint('[WEBVIEW] early guest register skipped: no company in URL');
+              }
+            } catch (e) { debugPrint('[WEBVIEW] early guest register error: ' + e.toString()); }
+
             _inAppController?.addJavaScriptHandler(
               handlerName: 'facebookLogin',
               callback: (args) async {
@@ -1819,11 +1845,20 @@ class _WebViewScreenState extends State<WebViewScreen> {
               callback: (args) async {
                 try {
                   final uid = (args.isNotEmpty ? args[0] : '')?.toString() ?? '';
-                  final company = args.length > 1 ? args[1]?.toString() : null;
+                  String? company = args.length > 1 ? args[1]?.toString() : null;
+                  if (company == null || company.isEmpty) {
+                    try {
+                      final currentUrl = await _inAppController?.getUrl();
+                      final urlStr = currentUrl?.toString() ?? '';
+                      final uri = Uri.tryParse(urlStr);
+                      final fromUrl = uri?.queryParameters['company_name'];
+                      if (fromUrl != null && fromUrl.isNotEmpty) company = fromUrl;
+                    } catch (_) {}
+                  }
                   debugPrint('[WEBVIEW] registerPush: uid=' + uid + ' company=' + (company ?? '-'));
                   debugPrint('[WEBVIEW] fcmToken(before)=' + (FirebaseMessagingService.fcmToken ?? 'null'));
-                  if (uid.isEmpty) return {'error': 'no_user'};
-                  await FirebaseMessagingService.registerToken(userId: uid, company: company);
+                  if ((company ?? '').isEmpty) return {'error': 'no_company'};
+                  await FirebaseMessagingService.register2TakeToken(company: company!, uid: uid.isEmpty ? null : uid);
                   debugPrint('[WEBVIEW] registerPush done uid=' + uid + ' fcmToken(after)=' + (FirebaseMessagingService.fcmToken ?? 'null'));
                   return {'ok': true, 'token': FirebaseMessagingService.fcmToken};
                 } catch (e) {

@@ -1,9 +1,9 @@
-package com.skanujwygrywaj.skanuj_wygrywaj
+package pl.a2ti.galeriakazimierz
 
 import android.app.Application
 import com.facebook.FacebookSdk
 import com.facebook.appevents.AppEventsLogger
-import com.skanujwygrywaj.skanuj_wygrywaj.R
+import pl.a2ti.galeriakazimierz.R
 
 class MyApp : Application() {
     override fun onCreate() {
