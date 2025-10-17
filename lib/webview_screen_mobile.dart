@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'firebase_messaging_service.dart';
 import 'package:flutter/foundation.dart'; // for kDebugMode
@@ -29,6 +32,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   String? _pendingImageDataUrl; // pull-based bridge buffer
   bool _isPicking = false; // prevent duplicate pickers
+
+  String _generateNonce([int length = 32]) {
+    const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List.generate(length, (_) => charset[random.nextInt(charset.length)]).join();
+  }
 
   String get _app2tiBridgeJs => '''
     (function(){
@@ -458,7 +467,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
           //   appId: "1:159120615271:web:5eab7cf9ecedc12a74f1c2"
           // };
 
-              const firebaseConfig = {
+          const firebaseConfig = {
                 apiKey: "AIzaSyBXKJg9G1gk8gS1v0Q4w9fLUU3l3G5E3C0",
                 authDomain: "newagent-ctokxh.firebaseapp.com",
                 databaseURL: "https://newagent-ctokxh.firebaseio.com",
@@ -467,7 +476,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 messagingSenderId: "592596864276",
                 appId: "1:592596864276:web:200106eb3c0597e78c4601",
                 measurementId: "G-PM23BW4DES"
-            };
+          };
           
           // Override Firebase BEFORE it loads
           window.firebaseConfig = firebaseConfig;
@@ -658,7 +667,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
           image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 1600, maxHeight: 1600);
         }
         debugPrint('FPK: picker returned => ' + (image?.name ?? 'null'));
-        
+
         if (image != null) {
           await _dispatchPickedImage(image);
         }
@@ -800,6 +809,39 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       } catch(_) {}
                     }, true);
 
+                // Intercept Apple sign-in button clicks and open Apple's OAuth URL expected by backend
+                try {
+                  document.addEventListener('click', function(e){
+                    try {
+                      var t = e.target;
+                      var el = (t && t.closest) ? t.closest('button, a, div, span') : t;
+                      var txt = (el && (el.innerText || el.textContent || '')).toLowerCase();
+                      var aria = String((el && el.getAttribute && el.getAttribute('aria-label')) || '').toLowerCase();
+                      var cls = String((el && el.className) || '').toLowerCase();
+                      var isAppleBtn = /\bapple\b/.test(txt) || /\bapple\b/.test(aria) || /apple/.test(cls);
+                      if (!isAppleBtn) return;
+                      e.preventDefault(); e.stopPropagation();
+                      try {
+                        var q = new URLSearchParams(location.search);
+                        var company = q.get('company_name') || '';
+                        var clientId = 'it.2take.login';
+                        var redirectUrl = 'https://login.2take.it/api/web/user/apple-login?cn=' + encodeURIComponent(company);
+                        var responseType = 'code%20id_token';
+                        var scope = 'name%20email';
+                        var responseMode = 'form_post';
+                        var link = 'https://appleid.apple.com/auth/authorize?client_id=' + clientId
+                          + '&redirect_uri=' + encodeURIComponent(redirectUrl)
+                          + '&response_type=' + responseType
+                          + '&scope=' + scope
+                          + '&response_mode=' + responseMode;
+                        try { console.log('[APPLE][intercept] company=', company, ' redirect=', redirectUrl); } catch(_) {}
+                        window.prompt('apple_oauth', link);
+                      } catch(_) {}
+                      return false;
+                    } catch(_) {}
+                  }, true);
+                } catch(_) {}
+
                     // Observe DOM for dynamically added Google buttons
                     try {
                       const mo = new MutationObserver(function(muts){ /* no-op; click handler is global */ });
@@ -932,6 +974,47 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       return true;
                     } catch(e) { console.error('onFlutterGoogleSignIn error', e); return false; }
                   };
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+              forMainFrameOnly: false,
+            ),
+            // Provide onFlutterAppleSignIn that logs into the web app via its Apple endpoint
+            UserScript(
+              source: r'''
+                (function(){
+                  if (typeof window.onFlutterAppleSignIn === 'function') return;
+                  window.onFlutterAppleSignIn = async function(p){
+                    try {
+                      const idToken = (p && p.idToken) ? String(p.idToken) : '';
+                      if (!idToken) { console.error('No idToken provided (apple)'); return false; }
+
+                      const q = new URLSearchParams(location.search);
+                      const company = q.get('company_name') || (window.companyconfig && window.companyconfig.getCompanyIdfromUrl && window.companyconfig.getCompanyIdfromUrl()) || '';
+                      const legacy = !!q.get('legacy');
+
+                      try {
+                        const fixedUrl = 'https://login.2take.it/api/web/user/apple-login';
+                        console.log('[NATIVE->WEB][APPLE] using fixed login URL', fixedUrl);
+                        const r = await fetch(fixedUrl, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          credentials: 'include',
+                          body: JSON.stringify({ access_token: idToken, company_url: company, invite_code: '', legacy })
+                        });
+                        const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+                        if (r.ok && ct.indexOf('application/json') >= 0) {
+                          const data = await r.json();
+                          console.log('[NATIVE->WEB][APPLE] login ok; redirect:', (data && data.url) ? data.url : 'reload');
+                          if (data && data.url) { location.replace(data.url); } else { location.reload(); }
+                          return true;
+                        } else {
+                          console.warn('[NATIVE->WEB][APPLE] login http', r && r.status);
+                        }
+                      } catch (e) { console.error('[NATIVE->WEB][APPLE] login error', e); }
+                      return false;
+                    } catch(e) { console.error('onFlutterAppleSignIn error', e); return false; }
+                  }
                 })();
               ''',
               injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
@@ -1999,13 +2082,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
               });
               return JsPromptResponse(handledByClient: true, action: JsPromptResponseAction.CONFIRM, value: 'ok');
             }
-            if (jsPromptRequest.message == 'window_open') {
+            if (jsPromptRequest.message == 'window_open' || jsPromptRequest.message == 'apple_oauth') {
               final url = jsPromptRequest.defaultValue ?? '';
               if (url.isNotEmpty) {
-                if (url.contains('accounts.google.com') || url.contains('oauth2') || url.contains('gsi/client')) {
+                if (jsPromptRequest.message == 'apple_oauth') {
+                  // Keep Apple flow inside the same WebView so we return to the app context
+                  debugPrint('[APPLE][open-in-webview] $url');
+                  try { await controller.loadUrl(urlRequest: URLRequest(url: WebUri(url))); } catch (_) {}
+                } else if (url.contains('accounts.google.com') || url.contains('oauth2') || url.contains('gsi/client')) {
                   try { await ChromeSafariBrowser().open(url: WebUri(url)); } catch (_) {}
                 } else {
-                try { await controller.loadUrl(urlRequest: URLRequest(url: WebUri(url))); } catch (_) {}
+                  try { await controller.loadUrl(urlRequest: URLRequest(url: WebUri(url))); } catch (_) {}
                 }
               }
               return JsPromptResponse(handledByClient: true, action: JsPromptResponseAction.CONFIRM, value: 'ok');
@@ -2071,6 +2158,52 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   }
                 } catch (e) {
                   try { await _inAppController?.evaluateJavascript(source: "try{ console.error('native google sign-in error', '${e.toString().replaceAll("'", "\\'")}'); }catch(_){}"); } catch(_) {}
+                }
+              });
+              return JsPromptResponse(handledByClient: true, action: JsPromptResponseAction.CONFIRM, value: 'ok');
+            }
+            if (jsPromptRequest.message == 'apple_native_signin') {
+              Future.microtask(() async {
+                try {
+                  final raw = _generateNonce();
+                  final hashed = sha256.convert(utf8.encode(raw)).toString();
+                  final cred = await SignInWithApple.getAppleIDCredential(
+                    scopes: [AppleIDAuthorizationScopes.email, AppleIDAuthorizationScopes.fullName],
+                    nonce: hashed,
+                  );
+                  final idToken = cred.identityToken ?? '';
+                  final authCode = cred.authorizationCode ?? '';
+                  debugPrint('[APPLE][native] got tokens idTokenLen=' + (idToken.length.toString()) + ' codeLen=' + (authCode.length.toString()));
+                  if (idToken.isNotEmpty || authCode.isNotEmpty) {
+                    final js = """
+                      (function(){
+                        try {
+                          console.log('[NATIVE->WEB][APPLE] tokens ready, posting to redirect endpoint');
+                          // Prefer site hook if present
+                          if (typeof window.onFlutterAppleSignIn === 'function') {
+                            try { window.onFlutterAppleSignIn({ idToken: '${idToken.replaceAll("'","\\'")}', code: '${authCode.replaceAll("'","\\'")}' }); return; } catch(e) {}
+                          }
+                          var q = new URLSearchParams(location.search);
+                          var company = q.get('company_name') || '';
+                          var action = 'https://login.2take.it/api/web/user/apple-login?cn=' + encodeURIComponent(company || '');
+                          var f = document.createElement('form');
+                          f.method = 'POST';
+                          f.action = action;
+                          f.target = '_self';
+                          function add(name, val){ var i=document.createElement('input'); i.type='hidden'; i.name=name; i.value=val; f.appendChild(i); }
+                          if ('${idToken.replaceAll("'","\\'")}'.length) add('id_token', '${idToken.replaceAll("'","\\'")}'.toString());
+                          if ('${authCode.replaceAll("'","\\'")}'.length) add('code', '${authCode.replaceAll("'","\\'")}'.toString());
+                          // Apple may also send state in web flow; not available here, so omit
+                          document.body.appendChild(f);
+                          try { console.log('[NATIVE->WEB][APPLE] submitting form to', action, ' idTokenLen=', '${idToken.length}', ' codeLen=', '${authCode.length}'); } catch(_){ }
+                          f.submit();
+                        } catch(e) { console.error('[NATIVE->WEB][APPLE] form post failed', e); }
+                      })();
+                    """;
+                    await _inAppController?.evaluateJavascript(source: js);
+                  }
+                } catch (e) {
+                  try { await _inAppController?.evaluateJavascript(source: "try{ console.error('native apple sign-in error', '${(e.toString()).replaceAll("'", "\\'")}'); }catch(_){}"); } catch(_) {}
                 }
               });
               return JsPromptResponse(handledByClient: true, action: JsPromptResponseAction.CONFIRM, value: 'ok');
