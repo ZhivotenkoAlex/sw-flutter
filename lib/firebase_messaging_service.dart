@@ -134,7 +134,7 @@ class FirebaseMessagingService {
       userId: _currentUserId!,
       token: token,
       platform: Platform.isAndroid ? 'android' : (Platform.isIOS ? 'ios' : 'unknown'),
-      appId: Platform.isAndroid ? 'pl.a2ti.galeriakazimierz' : 'com.skanujwygrywaj.skanujWygrywaj',
+      appId: Platform.isAndroid ? 'pl.a2ti.galeriakazimierz' : 'pl.a2ti.galeriakazimierz',
       company: _currentCompany,
       extra: _currentExtra,
     );
@@ -229,7 +229,7 @@ class FirebaseMessagingService {
       userId: userId,
       token: token,
       platform: Platform.isAndroid ? 'android' : (Platform.isIOS ? 'ios' : 'unknown'),
-      appId: Platform.isAndroid ? 'pl.a2ti.galeriakazimierz' : 'com.skanujwygrywaj.skanujWygrywaj',
+      appId: Platform.isAndroid ? 'pl.a2ti.galeriakazimierz' : 'pl.a2ti.galeriakazimierz',
       company: company,
       extra: extra,
     );
