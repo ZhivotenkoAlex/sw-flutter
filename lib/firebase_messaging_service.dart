@@ -86,22 +86,53 @@ class FirebaseMessagingService {
       final settings = await FirebaseMessaging.instance.getNotificationSettings();
       final status = settings.authorizationStatus;
       print('[FCM] permission status: ' + status.toString());
+      // Already granted (full or provisional)
       if (status == AuthorizationStatus.authorized || status == AuthorizationStatus.provisional) {
         if (Platform.isIOS) {
-          try { final apns = await FirebaseMessaging.instance.getAPNSToken(); print('[FCM] APNs token: ' + (apns ?? 'null')); } catch (e) { print('[FCM] getAPNSToken error: ' + e.toString()); }
+          try {
+            final apns = await FirebaseMessaging.instance.getAPNSToken();
+            print('[FCM] APNs token: ' + (apns ?? 'null'));
+            await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+              alert: true, badge: true, sound: true,
+            );
+          } catch (e) { print('[FCM] getAPNSToken error: ' + e.toString()); }
         }
         return true;
       }
-      // On Android 13+, it's valid to ask again when denied. On iOS, the OS blocks re-prompts once denied.
-      if (status == AuthorizationStatus.notDetermined || (Platform.isAndroid && status == AuthorizationStatus.denied)) {
-        final perm = await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);
-        final ok = perm.authorizationStatus == AuthorizationStatus.authorized || perm.authorizationStatus == AuthorizationStatus.provisional;
+      // First-run (not decided yet)
+      if (status == AuthorizationStatus.notDetermined) {
         if (Platform.isIOS) {
-          try { final apns = await FirebaseMessaging.instance.getAPNSToken(); print('[FCM] APNs token (post-request): ' + (apns ?? 'null')); } catch (e) { print('[FCM] getAPNSToken error: ' + e.toString()); }
+          // Request full permission on iOS so alerts/badges/sounds show immediately
+          final perm = await FirebaseMessaging.instance.requestPermission(
+            alert: true, badge: true, sound: true, provisional: false,
+          );
+          final ok = perm.authorizationStatus == AuthorizationStatus.authorized ||
+              perm.authorizationStatus == AuthorizationStatus.provisional;
+          if (ok) {
+            try {
+              final apns = await FirebaseMessaging.instance.getAPNSToken();
+              print('[FCM] APNs token (post-request): ' + (apns ?? 'null'));
+              await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+                alert: true, badge: true, sound: true,
+              );
+            } catch (e) { print('[FCM] getAPNSToken error: ' + e.toString()); }
+          }
+          return ok;
+        } else {
+          // Android: normal prompt
+          final perm = await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);
+          return perm.authorizationStatus == AuthorizationStatus.authorized;
         }
-        return ok;
       }
-      // denied/ephemeral: do not re-prompt (iOS blocks), return false
+      // Denied/ephemeral
+      if (status == AuthorizationStatus.denied) {
+        // Android can re-prompt; iOS must go to Settings
+        if (Platform.isAndroid) {
+          final perm = await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);
+          return perm.authorizationStatus == AuthorizationStatus.authorized;
+        }
+        return false;
+      }
       return false;
     } catch (e) {
       print('[FCM] _ensurePermissionIfNeeded error: ' + e.toString());
