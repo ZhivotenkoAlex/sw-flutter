@@ -33,7 +33,7 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.159120615271-5i5pom60tevv032bppgcletg3h7d8gc6</string>
+				<string>com.googleusercontent.apps.839029981684-kq8kc6rt5kkfqbameeui336gg5mipn55</string>
 			</array>
 		</dict>
 	</array>
@@ -46,7 +46,7 @@
 	<key>FacebookDisplayName</key>
 	<string>skanuj_wygrywaj</string>
 	<key>GIDClientID</key>
-	<string>159120615271-5i5pom60tevv032bppgcletg3h7d8gc6.apps.googleusercontent.com</string>
+	<string>839029981684-kq8kc6rt5kkfqbameeui336gg5mipn55.apps.googleusercontent.com</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>fbapi</string>
