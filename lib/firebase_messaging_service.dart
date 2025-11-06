@@ -3,6 +3,8 @@ import 'dart:io' show Platform;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:http/http.dart' as http;
+import 'app_config.dart';
+import 'firebase_config_loader.dart';
 
 class FirebaseMessagingService {
   static String? _fcmToken;
@@ -17,10 +19,18 @@ class FirebaseMessagingService {
   static String? _loyaltyCompany;
   static String? _loyaltyUid;
 
-  static Future<void> initialize() async {
+  static Future<void> initialize({AppConfig? config}) async {
     try {
       print('[FCM] initialize() start');
-      await Firebase.initializeApp();
+      
+      // Initialize Firebase with correct options based on config
+      if (config != null) {
+        final firebaseOptions = await FirebaseConfigLoader.loadFirebaseOptions(config);
+        await Firebase.initializeApp(options: firebaseOptions);
+      } else {
+        await Firebase.initializeApp();
+      }
+      
       try { print('[FCM] projectId=' + (Firebase.app().options.projectId ?? '-')); } catch (_) {}
       await FirebaseMessaging.instance.setAutoInitEnabled(true);
       // Proactively ensure permission at startup, but only if not decided yet

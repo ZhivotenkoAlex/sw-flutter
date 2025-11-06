@@ -2,39 +2,41 @@ import 'package:flutter/material.dart';
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
 import 'dart:ui_web' as ui;
+import 'app_config.dart';
 
-const url = 'https://login.2take.it/?company_name=galeria-kazimierz&legacy=true&d=9e30d60cdabaa8c6859b7ee737cd943b23d727b3';
-
-// Register the view factory only once
-void _registerIFrameViewFactory() {
-  // ignore: undefined_prefixed_name
-  ui.platformViewRegistry.registerViewFactory(
-    'iframeElement',
-    (int viewId) => html.IFrameElement()
-      ..src = url
-      ..style.border = 'none'
-      ..style.width = '100%'
-      ..style.height = '100%',
-  );
-}
-
-final _iframeRegistered = (() {
-  _registerIFrameViewFactory();
-  return true;
-})();
-
+// View factory will be registered dynamically per config
 class WebViewScreen extends StatelessWidget {
-  const WebViewScreen({super.key});
+  final AppConfig config;
+  
+  const WebViewScreen({super.key, required this.config});
+  
   @override
   Widget build(BuildContext context) {
-    _iframeRegistered; // Ensures registration
-    
-    // Inject Firebase bridge for web
-    _injectWebFirebaseBridge();
+    // Register iframe with dynamic URL
+    _registerIFrameViewFactory(config.webviewUrl);
     
     return Scaffold(
-      body: HtmlElementView(viewType: 'iframeElement'),
+      body: HtmlElementView(viewType: 'iframeElement_${config.webviewUrl.hashCode}'),
     );
+  }
+  
+  void _registerIFrameViewFactory(String url) {
+    final viewType = 'iframeElement_${url.hashCode}';
+    
+    try {
+      // ignore: undefined_prefixed_name
+      ui.platformViewRegistry.registerViewFactory(
+        viewType,
+        (int viewId) => html.IFrameElement()
+          ..src = url
+          ..style.border = 'none'
+          ..style.width = '100%'
+          ..style.height = '100%',
+      );
+    } catch (e) {
+      // View factory already registered, which is fine
+      print('View factory already registered: $viewType');
+    }
   }
   
   void _injectWebFirebaseBridge() {

@@ -4,6 +4,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'webview_screen.dart';
 import 'firebase_messaging_service.dart';
+import 'config_service.dart';
+import 'app_config.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -27,28 +29,46 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Only initialize Firebase on mobile platforms
+  // 1. Fetch app configuration (with cache/mock)
+  print('[Main] Fetching app configuration...');
+  final config = await ConfigService.getConfig();
+  print('[Main] Config loaded: isLegacy=${config.isLegacy}, firebase=${config.firebaseProject}');
+  
+  // 2. Initialize Firebase on mobile platforms with correct project
   if (!kIsWeb) {
     // Register background handler early for iOS/macOS/Android background messages
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    
     try {
-      await FirebaseMessagingService.initialize();
+      await FirebaseMessagingService.initialize(config: config);
+      
+      // Configure API based on config
+      final backendUrl = config.backendUrl ?? 
+        (config.isLegacy 
+          ? 'https://europe-central2-galeria-kazimierz-827d4.cloudfunctions.net/legacy-backend'
+          : 'https://europe-central2-development-417611.cloudfunctions.net/kanuj-wygrywaj-backend');
+      
       FirebaseMessagingService.configureApi(
-        baseUrl: 'https://europe-central2-development-417611.cloudfunctions.net/kanuj-wygrywaj-backend',
+        baseUrl: backendUrl,
         registerPath: '/notifications/register-token',
       );
+      
+      print('[Main] Firebase initialized with project: ${config.firebaseProject}');
     } catch (e) {
-      print('Firebase initialization failed, continuing without it: $e');
+      print('[Main] Firebase initialization failed, continuing without it: $e');
     }
   } else {
-    print('Running on web, skipping Firebase initialization');
+    print('[Main] Running on web, skipping Firebase initialization');
   }
   
-  runApp(const MyApp());
+  // 3. Run app with config
+  runApp(MyApp(config: config));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final AppConfig config;
+  
+  const MyApp({super.key, required this.config});
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +78,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const WebViewScreen(),
+      home: WebViewScreen(config: config),
     );
   }
 }
