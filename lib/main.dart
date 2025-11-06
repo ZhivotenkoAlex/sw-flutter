@@ -6,6 +6,7 @@ import 'webview_screen.dart';
 import 'firebase_messaging_service.dart';
 import 'config_service.dart';
 import 'app_config.dart';
+import 'flavor_config.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -29,7 +30,11 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // 1. Fetch app configuration (with cache/mock)
+  // 0. Initialize flavor configuration
+  await FlavorConfig.autoDetect();
+  print('[Main] Flavor: ${FlavorConfig.instance.name}');
+  
+  // 1. Fetch app configuration (with cache/mock, or use flavor defaults)
   print('[Main] Fetching app configuration...');
   final config = await ConfigService.getConfig();
   print('[Main] Config loaded: isLegacy=${config.isLegacy}, firebase=${config.firebaseProject}');

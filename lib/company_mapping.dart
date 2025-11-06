@@ -1,14 +1,16 @@
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'flavor_config.dart';
 
 class CompanyMapping {
   static String? _cachedCompanyId;
 
-  /// Get company ID from package identifier or --dart-define override
+  /// Get company ID from flavor or package identifier
   /// 
-  /// Examples:
-  /// - pl.a2ti.galeriakazimierz -> galeria-kazimierz
-  /// - com.cgence.adminpanel.brandcentiv.prod -> brand-centiv
+  /// Priority:
+  /// 1. --dart-define=COMPANY_ID override (for debugging)
+  /// 2. Flavor configuration (if initialized)
+  /// 3. Package identifier extraction
   /// 
   /// For debugging, use: flutter run --dart-define=COMPANY_ID=test-company
   static Future<String> getCompanyId() async {
@@ -25,7 +27,15 @@ class CompanyMapping {
       return companyIdOverride;
     }
 
-    // Get from package identifier
+    // Use flavor config if available
+    if (FlavorConfig.isInitialized) {
+      final companyId = FlavorConfig.instance.companyId;
+      print('[CompanyMapping] Using company ID from flavor: $companyId');
+      _cachedCompanyId = companyId;
+      return companyId;
+    }
+
+    // Get from package identifier (fallback)
     try {
       final packageInfo = await PackageInfo.fromPlatform();
       final packageName = packageInfo.packageName;
@@ -45,16 +55,16 @@ class CompanyMapping {
 
   /// Extract company ID from package name
   /// 
-  /// Mapping rules:
+  /// Mapping rules (aligned with flavors):
   /// - pl.a2ti.galeriakazimierz -> galeria-kazimierz
   /// - pl.a2ti.kazimierzclub -> kazimierz-club
-  /// - com.cgence.adminpanel.brandcentiv.prod -> brand-centiv
+  /// - com.skanujwygrywaj.skanuj_wygrywaj -> kazimierz-club-new
   static String _extractCompanyIdFromPackage(String packageName) {
-    // Known package mappings
+    // Known package mappings (should match flavor configs)
     const Map<String, String> packageMappings = {
       'pl.a2ti.galeriakazimierz': 'galeria-kazimierz',
       'pl.a2ti.kazimierzclub': 'kazimierz-club',
-      'com.cgence.adminpanel.brandcentiv.prod': 'brand-centiv',
+      'com.skanujwygrywaj.skanuj_wygrywaj': 'kazimierz-club-new',
       // Add more mappings as needed
     };
 

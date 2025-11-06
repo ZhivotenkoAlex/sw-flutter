@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'app_config.dart';
 import 'company_mapping.dart';
+import 'flavor_config.dart';
 
 class ConfigService {
   static const String _baseUrl = 
@@ -86,6 +87,12 @@ class ConfigService {
   static Future<AppConfig> _getMockResponse() async {
     await Future.delayed(const Duration(milliseconds: 500)); // Simulate network
     
+    // Use flavor config if available, otherwise fetch company ID
+    if (FlavorConfig.isInitialized) {
+      print('[ConfigService] Using flavor defaults for mock response');
+      return FlavorConfig.instance.createDefaultAppConfig();
+    }
+    
     final companyId = await CompanyMapping.getCompanyId();
     
     // Mock response - defaults to legacy mode
@@ -100,6 +107,12 @@ class ConfigService {
 
   /// Get default config as ultimate fallback
   static AppConfig _getDefaultConfig() {
+    // Use flavor config if available
+    if (FlavorConfig.isInitialized) {
+      print('[ConfigService] Using flavor defaults for fallback');
+      return FlavorConfig.instance.createDefaultAppConfig();
+    }
+    
     return AppConfig(
       webviewUrl: 'https://login.2take.it/?company_name=galeria-kazimierz&legacy=true&d=9e30d60cdabaa8c6859b7ee737cd943b23d727b3',
       isLegacy: true,
