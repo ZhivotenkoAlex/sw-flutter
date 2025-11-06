@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
 import 'app_config.dart';
 import 'firebase_config_loader.dart';
 
@@ -18,6 +19,7 @@ class FirebaseMessagingService {
   static final TwoTakeLoyaltyPushClient _loyalty = TwoTakeLoyaltyPushClient();
   static String? _loyaltyCompany;
   static String? _loyaltyUid;
+  static String? _cachedPackageId;
 
   static Future<void> initialize({AppConfig? config}) async {
     try {
@@ -165,17 +167,30 @@ class FirebaseMessagingService {
     }
   }
 
+  static Future<String> _getPackageId() async {
+    if (_cachedPackageId != null) return _cachedPackageId!;
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      _cachedPackageId = packageInfo.packageName;
+      return _cachedPackageId!;
+    } catch (e) {
+      print('[FCM] Failed to get package ID: $e');
+      return 'unknown';
+    }
+  }
+
   static Future<void> _autoUpsertIfPossible() async {
     if (_api == null) { print('[FCM] skip upsert: api not configured'); return; }
     if (_currentUserId == null) { print('[FCM] skip upsert: user not set'); return; }
     final token = await _awaitFcmToken();
     if (token == null || token.isEmpty) { print('[FCM] skip upsert: token missing'); return; }
     if (_lastSentToken == token) { print('[FCM] skip upsert: token unchanged'); return; }
+    final packageId = await _getPackageId();
     await _api!.upsertToken(
       userId: _currentUserId!,
       token: token,
       platform: Platform.isAndroid ? 'android' : (Platform.isIOS ? 'ios' : 'unknown'),
-      appId: Platform.isAndroid ? 'pl.a2ti.galeriakazimierz' : 'pl.a2ti.galeriakazimierz',
+      appId: packageId,
       company: _currentCompany,
       extra: _currentExtra,
     );
@@ -266,11 +281,12 @@ class FirebaseMessagingService {
     _fcmToken ??= token;
     print('[FCM] registerTokenWith override token len=' + token.length.toString());
     await _ensurePermissionIfNeeded();
+    final packageId = await _getPackageId();
     await _api!.upsertToken(
       userId: userId,
       token: token,
       platform: Platform.isAndroid ? 'android' : (Platform.isIOS ? 'ios' : 'unknown'),
-      appId: Platform.isAndroid ? 'pl.a2ti.galeriakazimierz' : 'pl.a2ti.galeriakazimierz',
+      appId: packageId,
       company: company,
       extra: extra,
     );
@@ -358,9 +374,9 @@ class NotificationsApiClient {
       'fcm_token': token,
       'device_info': {
         'platform': platform,
-        'company': "kazimierz-club-new",
         'app_id': appId,
-        platform: "mobile",
+        'device_type': "mobile",
+        if (company != null) 'company': company,
         if (extra != null) ...extra,
       },
       if (company != null) 'company_name': company,
