@@ -8,7 +8,11 @@ plugins {
 android {
     namespace = "pl.a2ti.galeriakazimierz"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "27.0.12077973"
+
+    buildFeatures {
+        buildConfig = true
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -22,7 +26,7 @@ android {
     defaultConfig {
         // Base application ID - overridden by flavors
         applicationId = "pl.a2ti.galeriakazimierz"
-        minSdk = flutter.minSdkVersion
+        minSdk = 23  // Required by Firebase Auth
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
