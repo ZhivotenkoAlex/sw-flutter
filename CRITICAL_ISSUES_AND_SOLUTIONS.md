@@ -178,23 +178,86 @@ Each flavor:
 - ✅ Legacy mode works (package IDs match)
 - ❌ New mode will NOT work until Firebase config mismatch is resolved
 
+### 4. Android Build Configuration Issues ✅
+
+**Problems:**
+- NDK version mismatch (plugins require 27.0.12077973)
+- minSdkVersion too low (Firebase Auth requires 23)
+- BuildConfig fields not enabled for flavors
+- MainActivity had complex Facebook SDK code
+
+**Fixes Applied:**
+
+```kotlin
+// android/app/build.gradle.kts
+android {
+    ndkVersion = "27.0.12077973"  // Was: flutter.ndkVersion
+    
+    buildFeatures {
+        buildConfig = true  // Required for flavor BuildConfig fields
+    }
+    
+    defaultConfig {
+        minSdk = 23  // Was: 21, Required by Firebase Auth
+    }
+}
+```
+
+**Simplified MainActivity.kt:**
+```kotlin
+package pl.a2ti.galeriakazimierz
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity: FlutterActivity() {
+}
+```
+
+**Deleted:** `MyApp.kt` (Facebook SDK handled by plugin)
+
+---
+
+## ✅ ISSUE RESOLVED: Build Flavors Implemented
+
+**Solution Chosen:** Option 1 - Build Flavors
+
+The app now uses Flutter/Gradle flavors to build different versions:
+
+- ✅ `galeriaKazimierz` - Legacy mode, pl.a2ti.galeriakazimierz
+- ✅ `kazimierzClub` - Legacy mode, pl.a2ti.kazimierzclub  
+- ✅ `skanujNew` - New mode, com.skanujwygrywaj.skanuj_wygrywaj
+
+Each flavor has its own:
+- Package/Bundle ID
+- Firebase configuration
+- App name
+- Default settings
+
+See `FLAVORS_GUIDE.md` for complete documentation.
+
 ---
 
 ## Testing After Fixes
 
-### Test Legacy Mode (Should Work Now)
+### Test Legacy Mode (Galeria Kazimierz)
 
 ```bash
-flutter run
-# Should use: pl.a2ti.galeriakazimierz + galeria-kazimierz Firebase
+flutter run --flavor galeriaKazimierz --dart-define=FLAVOR=galeriaKazimierz
+# Package: pl.a2ti.galeriakazimierz + galeria-kazimierz Firebase
 ```
 
-### Test New Mode (Requires Config Update)
+### Test Legacy Mode (Kazimierz Club)
 
 ```bash
-# In config_service.dart, change mock to isLegacy: false
-flutter run
-# Will FAIL until package ID issue is resolved
+flutter run --flavor kazimierzClub --dart-define=FLAVOR=kazimierzClub
+# Package: pl.a2ti.kazimierzclub + galeria-kazimierz Firebase
+```
+
+### Test New Mode (Skanuj Wygrywaj)
+
+```bash
+flutter run --flavor skanujNew --dart-define=FLAVOR=skanujNew
+# Package: com.skanujwygrywaj.skanuj_wygrywaj + development-417611 Firebase
 ```
 
 ---
