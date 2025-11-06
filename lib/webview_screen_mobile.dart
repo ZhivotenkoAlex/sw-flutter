@@ -12,10 +12,12 @@ import 'firebase_messaging_service.dart';
 import 'package:flutter/foundation.dart'; // for kDebugMode
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/services.dart';
+import 'app_config.dart';
 
 class WebViewScreen extends StatefulWidget {
-  const WebViewScreen({super.key});
+  final AppConfig config;
+  
+  const WebViewScreen({super.key, required this.config});
 
   @override
   State<WebViewScreen> createState() => _WebViewScreenState();
@@ -693,7 +695,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final initialUrl = 'https://login.2take.it/?company_name=galeria-kazimierz&legacy=true&d=9e30d60cdabaa8c6859b7ee737cd943b23d727b3';
+    final initialUrl = widget.config.webviewUrl;
     return Scaffold(
       body: SafeArea(
         child: InAppWebView(

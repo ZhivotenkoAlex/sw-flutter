@@ -9,11 +9,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:skanuj_wygrywaj/main.dart';
+import 'package:skanuj_wygrywaj/app_config.dart';
 
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
+    // Create a test config
+    final testConfig = AppConfig(
+      webviewUrl: 'https://test.example.com',
+      isLegacy: true,
+      firebaseProject: 'test-project',
+      fetchedAt: DateTime.now(),
+    );
+
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(MyApp(config: testConfig));
 
     // Verify that our counter starts at 0.
     expect(find.text('0'), findsOneWidget);

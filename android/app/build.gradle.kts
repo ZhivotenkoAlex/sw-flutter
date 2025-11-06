@@ -8,7 +8,11 @@ plugins {
 android {
     namespace = "pl.a2ti.galeriakazimierz"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "27.0.12077973"
+
+    buildFeatures {
+        buildConfig = true
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -20,11 +24,9 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // Base application ID - overridden by flavors
         applicationId = "pl.a2ti.galeriakazimierz"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -36,6 +38,31 @@ android {
             storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "your_keystore_password"
             keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
             keyPassword = System.getenv("KEY_PASSWORD") ?: "your_key_password"
+        }
+    }
+
+    flavorDimensions += "company"
+    
+    productFlavors {
+        create("galeriaKazimierz") {
+            dimension = "company"
+            applicationId = "pl.a2ti.galeriakazimierz"
+            resValue("string", "app_name", "Galeria Kazimierz")
+            buildConfigField("String", "FLAVOR_NAME", "\"galeriaKazimierz\"")
+        }
+        
+        create("kazimierzClub") {
+            dimension = "company"
+            applicationId = "pl.a2ti.kazimierzclub"
+            resValue("string", "app_name", "Kazimierz Club")
+            buildConfigField("String", "FLAVOR_NAME", "\"kazimierzClub\"")
+        }
+        
+        create("skanujNew") {
+            dimension = "company"
+            applicationId = "com.skanujwygrywaj.skanuj_wygrywaj"
+            resValue("string", "app_name", "Skanuj Wygrywaj")
+            buildConfigField("String", "FLAVOR_NAME", "\"skanujNew\"")
         }
     }
 
