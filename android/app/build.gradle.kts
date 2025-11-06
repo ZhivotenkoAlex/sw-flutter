@@ -26,7 +26,7 @@ android {
     defaultConfig {
         // Base application ID - overridden by flavors
         applicationId = "pl.a2ti.galeriakazimierz"
-        minSdk = 23  // Required by Firebase Auth
+        minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
