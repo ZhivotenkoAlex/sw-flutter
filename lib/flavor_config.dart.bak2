@@ -49,10 +49,9 @@ class FlavorConfig {
   static Future<FlavorConfig> autoDetect() async {
     // Try to detect from --dart-define
     const flavorEnv = String.fromEnvironment('FLAVOR');
-    print('[Flavor] DEBUG: fromEnvironment returned: "$flavorEnv" (isEmpty: ${flavorEnv.isEmpty})');
     if (flavorEnv.isNotEmpty) {
+    print('[Flavor] DEBUG: fromEnvironment returned: "$flavorEnv" (isEmpty: ${flavorEnv.isEmpty})');
       final flavor = _flavorFromString(flavorEnv);
-      print('[Flavor] DEBUG: _flavorFromString returned: $flavor');
       if (flavor != null) {
         initialize(flavor);
         return instance;
@@ -71,10 +70,9 @@ class FlavorConfig {
       case 'galeria_kazimierz':
       case 'galeria-kazimierz':
         return FlavorType.galeriaKazimierz;
-      case 'galeriakazimierznew':
+      case 'galeriakazimiernew':
       case 'galeria_kazimierz_new':
       case 'galeria-kazimierz-new':
-      case 'kazimierz-club-new':
         return FlavorType.galeriaKazimierzNew;
       default:
         return null;
@@ -100,15 +98,16 @@ class FlavorConfig {
           flavor: FlavorType.galeriaKazimierzNew,
           name: 'Galeria Kazimierz New',
           packageId: 'com.skanujwygrywaj.skanuj_wygrywaj',
-          companyId: 'kazimierz-club-new',
+          companyId: 'galeria-kazimierz-new',
           isLegacyByDefault: false,
           firebaseProject: 'development-417611',
-          defaultWebviewUrl: 'https://skanuj-staging.web.app?company_name=kazimierz-club-new',
+          defaultWebviewUrl: 'https://skanuj-staging.web.app?company_name=galeria-kazimierz-new',
           defaultBackendUrl: 'https://europe-central2-development-417611.cloudfunctions.net/kanuj-wygrywaj-backend',
         );
     }
   }
 
+  /// Create a default AppConfig based on flavor
   AppConfig createDefaultAppConfig() {
     return AppConfig(
       webviewUrl: defaultWebviewUrl,
@@ -124,3 +123,4 @@ class FlavorConfig {
     return 'FlavorConfig(name: $name, packageId: $packageId, companyId: $companyId)';
   }
 }
+

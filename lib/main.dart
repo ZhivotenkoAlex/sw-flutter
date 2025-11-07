@@ -36,7 +36,7 @@ void main() async {
   
   // 1. Fetch app configuration (with cache/mock, or use flavor defaults)
   print('[Main] Fetching app configuration...');
-  final config = await ConfigService.getConfig();
+  final config = await ConfigService.getConfig(forceRefresh: kDebugMode);
   print('[Main] Config loaded: isLegacy=${config.isLegacy}, firebase=${config.firebaseProject}');
   
   // 2. Initialize Firebase on mobile platforms with correct project
