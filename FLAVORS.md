@@ -21,10 +21,9 @@ Each flavor has:
 ## Current Flavors
 
 | Flavor | Company | Package ID | Type | Firebase |
-|--------|---------|------------|------|----------|
+|--------|---------|------------|------|---------|
 | `galeriaKazimierz` | Galeria Kazimierz | Android: `pl.a2ti.galeriakazimierz`<br>iOS: `it.2take.galeriakazimierz` | Legacy | galeria-kazimierz-827d4 |
-| `kazimierzClub` | Kazimierz Club | `pl.a2ti.kazimierzclub` | Legacy | galeria-kazimierz-827d4 |
-| `skanujNew` | Skanuj Wygrywaj | Android: `com.skanujwygrywaj.skanuj_wygrywaj`<br>iOS: `com.skanujwygrywaj.skanujWygrywaj` | New | development-417611 |
+| `galeriaKazimierzNew` | Galeria Kazimierz New | Android: `com.skanujwygrywaj.skanuj_wygrywaj`<br>iOS: `com.skanujwygrywaj.skanujWygrywaj` | New | development-417611 |
 
 ## Using Flavors
 
@@ -34,11 +33,11 @@ Each flavor has:
 # Galeria Kazimierz
 flutter run --flavor galeriaKazimierz --dart-define=FLAVOR=galeriaKazimierz
 
-# Kazimierz Club
-flutter run --flavor kazimierzClub --dart-define=FLAVOR=kazimierzClub
+# Galeria Kazimierz New
+flutter run --flavor galeriaKazimierzNew --dart-define=FLAVOR=galeriaKazimierzNew
 
-# Skanuj New
-flutter run --flavor skanujNew --dart-define=FLAVOR=skanujNew
+# Galeria Kazimierz New
+flutter run --flavor galeriaKazimierzNew --dart-define=FLAVOR=galeriaKazimierzNew
 ```
 
 ### Build for Release
@@ -46,7 +45,7 @@ flutter run --flavor skanujNew --dart-define=FLAVOR=skanujNew
 **Using Build Script:**
 ```bash
 ./build_flavor.sh galeriaKazimierz android release
-./build_flavor.sh skanujNew ios release
+./build_flavor.sh galeriaKazimierzNew ios release
 ```
 
 **Manual Build:**
@@ -55,10 +54,10 @@ flutter run --flavor skanujNew --dart-define=FLAVOR=skanujNew
 flutter build apk --flavor galeriaKazimierz --dart-define=FLAVOR=galeriaKazimierz
 
 # Android App Bundle
-flutter build appbundle --flavor skanujNew --dart-define=FLAVOR=skanujNew
+flutter build appbundle --flavor galeriaKazimierzNew --dart-define=FLAVOR=galeriaKazimierzNew
 
 # iOS
-flutter build ios --flavor kazimierzClub --dart-define=FLAVOR=kazimierzClub
+flutter build ios --flavor galeriaKazimierzNew --dart-define=FLAVOR=galeriaKazimierzNew
 ```
 
 ## Adding New Companies
@@ -133,8 +132,8 @@ Edit `lib/flavor_config.dart`:
 ```dart
 enum FlavorType {
   galeriaKazimierz,
-  kazimierzClub,
-  skanujNew,
+  galeriaKazimierzNew,
+  galeriaKazimierzNew,
   newCompany,  // ADD
   unknown,
 }

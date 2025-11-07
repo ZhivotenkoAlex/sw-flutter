@@ -2,8 +2,7 @@ import 'app_config.dart';
 
 enum FlavorType {
   galeriaKazimierz,
-  kazimierzClub,
-  skanujNew,
+  galeriaKazimierzNew,
 }
 
 class FlavorConfig {
@@ -70,14 +69,10 @@ class FlavorConfig {
       case 'galeria_kazimierz':
       case 'galeria-kazimierz':
         return FlavorType.galeriaKazimierz;
-      case 'kazimierzclub':
-      case 'kazimierz_club':
-      case 'kazimierz-club':
-        return FlavorType.kazimierzClub;
-      case 'skanujnew':
-      case 'skanuj_new':
-      case 'skanuj-new':
-        return FlavorType.skanujNew;
+      case 'galeriakazimiernew':
+      case 'galeria_kazimierz_new':
+      case 'galeria-kazimierz-new':
+        return FlavorType.galeriaKazimierzNew;
       default:
         return null;
     }
@@ -97,27 +92,15 @@ class FlavorConfig {
           defaultBackendUrl: 'https://europe-central2-galeria-kazimierz-827d4.cloudfunctions.net/legacy-backend',
         );
 
-      case FlavorType.kazimierzClub:
+      case FlavorType.galeriaKazimierzNew:
         return FlavorConfig(
-          flavor: FlavorType.kazimierzClub,
-          name: 'Kazimierz Club',
-          packageId: 'pl.a2ti.kazimierzclub',
-          companyId: 'kazimierz-club',
-          isLegacyByDefault: true,
-          firebaseProject: 'galeria-kazimierz', // Uses same Firebase project for now
-          defaultWebviewUrl: 'https://login.2take.it/?company_name=kazimierz-club&legacy=true&d=9e30d60cdabaa8c6859b7ee737cd943b23d727b3',
-          defaultBackendUrl: 'https://europe-central2-galeria-kazimierz-827d4.cloudfunctions.net/legacy-backend',
-        );
-
-      case FlavorType.skanujNew:
-        return FlavorConfig(
-          flavor: FlavorType.skanujNew,
-          name: 'Skanuj Wygrywaj',
+          flavor: FlavorType.galeriaKazimierzNew,
+          name: 'Galeria Kazimierz New',
           packageId: 'com.skanujwygrywaj.skanuj_wygrywaj',
-          companyId: 'kazimierz-club-new',
+          companyId: 'galeria-kazimierz-new',
           isLegacyByDefault: false,
           firebaseProject: 'development-417611',
-          defaultWebviewUrl: 'https://skanuj-staging.web.app?company_name=kazimierz-club-new',
+          defaultWebviewUrl: 'https://skanuj-staging.web.app?company_name=galeria-kazimierz-new',
           defaultBackendUrl: 'https://europe-central2-development-417611.cloudfunctions.net/kanuj-wygrywaj-backend',
         );
     }

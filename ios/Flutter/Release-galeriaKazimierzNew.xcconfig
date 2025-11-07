@@ -1,4 +1,4 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
 #include "Generated.xcconfig"
-PRODUCT_BUNDLE_IDENTIFIER = pl.a2ti.kazimierzclub
-FLUTTER_FLAVOR = kazimierzClub
+PRODUCT_BUNDLE_IDENTIFIER = com.skanujwygrywaj.skanujWygrywaj
+FLUTTER_FLAVOR = galeriaKazimierzNew

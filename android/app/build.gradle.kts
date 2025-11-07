@@ -51,17 +51,10 @@ android {
             buildConfigField("String", "FLAVOR_NAME", "\"galeriaKazimierz\"")
         }
         
-        create("kazimierzClub") {
-            dimension = "company"
-            applicationId = "pl.a2ti.kazimierzclub"
-            resValue("string", "app_name", "Kazimierz Club")
-            buildConfigField("String", "FLAVOR_NAME", "\"kazimierzClub\"")
-        }
-        
-        create("skanujNew") {
+        create("galeriaKazimierzNew") {
             dimension = "company"
             applicationId = "com.skanujwygrywaj.skanuj_wygrywaj"
-            resValue("string", "app_name", "Skanuj Wygrywaj")
+            resValue("string", "app_name", "Galeria Kazimierz New")
             buildConfigField("String", "FLAVOR_NAME", "\"skanujNew\"")
         }
     }

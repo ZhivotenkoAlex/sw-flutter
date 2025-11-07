@@ -1,4 +1,4 @@
-# Skanuj Wygrywaj - Multi-Company Flutter Application
+# Galeria Kazimierz New - Multi-Company Flutter Application
 
 A unified Flutter application supporting multiple companies through build flavors, featuring dynamic configuration, Firebase integration, and WebView-based content delivery.
 
@@ -43,8 +43,8 @@ flutter run --flavor galeriaKazimierz --dart-define=FLAVOR=galeriaKazimierz
 | Company | Flavor Name | Package ID | Type |
 |---------|-------------|------------|------|
 | Galeria Kazimierz | `galeriaKazimierz` | `pl.a2ti.galeriakazimierz` (Android)<br>`it.2take.galeriakazimierz` (iOS) | Legacy |
-| Kazimierz Club | `kazimierzClub` | `pl.a2ti.kazimierzclub` | Legacy |
-| Skanuj Wygrywaj | `skanujNew` | `com.skanujwygrywaj.skanuj_wygrywaj` (Android)<br>`com.skanujwygrywaj.skanujWygrywaj` (iOS) | New |
+| Galeria Kazimierz New | `galeriaKazimierzNew` | `pl.a2ti.kazimierzclub` | Legacy |
+| Galeria Kazimierz New | `galeriaKazimierzNew` | `com.skanujwygrywaj.skanuj_wygrywaj` (Android)<br>`com.skanujwygrywaj.skanujWygrywaj` (iOS) | New |
 
 ## Building for Production
 
@@ -77,7 +77,7 @@ chmod +x build_flavor.sh
 
 # Build release
 ./build_flavor.sh galeriaKazimierz android release
-./build_flavor.sh skanujNew ios release
+./build_flavor.sh galeriaKazimierzNew ios release
 ```
 
 ## Project Architecture
@@ -133,13 +133,13 @@ lib/
 
 android/app/src/
 ├── galeriaKazimierz/              # Firebase config for Galeria Kazimierz
-├── kazimierzClub/                 # Firebase config for Kazimierz Club
-└── skanujNew/                     # Firebase config for Skanuj New
+├── galeriaKazimierzNew/                 # Firebase config for Galeria Kazimierz New
+└── galeriaKazimierzNew/                     # Firebase config for Skanuj New
 
 ios/
 ├── galeriaKazimierz/              # iOS Firebase configs
-├── kazimierzClub/                 # iOS Firebase configs
-├── skanujNew/                     # iOS Firebase configs
+├── galeriaKazimierzNew/                 # iOS Firebase configs
+├── galeriaKazimierzNew/                     # iOS Firebase configs
 └── Flutter/                       # xcconfig files for bundle IDs
 ```
 
@@ -159,7 +159,7 @@ flutter run --flavor galeriaKazimierz --dart-define=FLAVOR=galeriaKazimierz
 ./build_flavor.sh galeriaKazimierz android release
 
 # Build all flavors
-for flavor in galeriaKazimierz kazimierzClub skanujNew; do
+for flavor in galeriaKazimierz galeriaKazimierzNew galeriaKazimierzNew; do
   ./build_flavor.sh $flavor android release
 done
 ```

@@ -12,9 +12,8 @@ if [ -z "$FLAVOR" ] || [ -z "$PLATFORM" ]; then
     echo "Usage: ./build_flavor.sh [flavor] [platform] [mode]"
     echo ""
     echo "Flavors:"
-    echo "  galeriaKazimierz  - Galeria Kazimierz (Legacy)"
-    echo "  kazimierzClub     - Kazimierz Club (Legacy)"
-    echo "  skanujNew         - Skanuj Wygrywaj (New App)"
+    echo "  galeriaKazimierz     - Galeria Kazimierz (Legacy)"
+    echo "  galeriaKazimierzNew  - Galeria Kazimierz New"
     echo ""
     echo "Platforms:"
     echo "  android - Build APK/AAB"
@@ -26,7 +25,7 @@ if [ -z "$FLAVOR" ] || [ -z "$PLATFORM" ]; then
     echo ""
     echo "Examples:"
     echo "  ./build_flavor.sh galeriaKazimierz android release"
-    echo "  ./build_flavor.sh skanujNew ios debug"
+    echo "  ./build_flavor.sh galeriaKazimierzNew ios debug"
     exit 1
 fi
 

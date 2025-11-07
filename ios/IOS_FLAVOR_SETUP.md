@@ -32,11 +32,11 @@ open Runner.xcworkspace
 6. Name it: `Debug-galeriaKazimierz`
 7. Repeat to create all:
    - `Debug-galeriaKazimierz`
-   - `Debug-kazimierzClub`
-   - `Debug-skanujNew`
+   - `Debug-galeriaKazimierzNew`
+   - `Debug-galeriaKazimierzNew`
    - `Release-galeriaKazimierz`
-   - `Release-kazimierzClub`
-   - `Release-skanujNew`
+   - `Release-galeriaKazimierzNew`
+   - `Release-galeriaKazimierzNew`
 
 ### Step 3: Link xcconfig Files
 
@@ -53,11 +53,11 @@ For each configuration:
 1. Menu: `Product` > `Scheme` > `Manage Schemes`
 2. Click **+** button
 3. Name: `galeriaKazimierz`, Target: **Runner**
-4. Repeat for: `kazimierzClub`, `skanujNew`
+4. Repeat for: `galeriaKazimierzNew`, `galeriaKazimierzNew`
 
 ### Step 5: Configure Each Scheme
 
-For each scheme (galeriaKazimierz, kazimierzClub, skanujNew):
+For each scheme (galeriaKazimierz, galeriaKazimierzNew, galeriaKazimierzNew):
 
 1. Select scheme, click **Edit Scheme**
 2. **Run** → Build Configuration: `Debug-{flavorName}`
@@ -111,7 +111,7 @@ fi
 ```bash
 # Test from command line
 flutter run --flavor galeriaKazimierz --dart-define=FLAVOR=galeriaKazimierz
-flutter run --flavor skanujNew --dart-define=FLAVOR=skanujNew
+flutter run --flavor galeriaKazimierzNew --dart-define=FLAVOR=galeriaKazimierzNew
 
 # Or use build script
 ./build_flavor.sh galeriaKazimierz ios debug
@@ -122,8 +122,8 @@ flutter run --flavor skanujNew --dart-define=FLAVOR=skanujNew
 | Flavor | Bundle ID | Firebase Project | App Name |
 |--------|-----------|------------------|----------|
 | galeriaKazimierz | it.2take.galeriakazimierz | galeria-kazimierz-827d4 | Galeria Kazimierz |
-| kazimierzClub | pl.a2ti.kazimierzclub | galeria-kazimierz-827d4 | Kazimierz Club |
-| skanujNew | com.skanujwygrywaj.skanujWygrywaj | development-417611 | Skanuj Wygrywaj |
+| galeriaKazimierzNew | pl.a2ti.kazimierzclub | galeria-kazimierz-827d4 | Galeria Kazimierz New |
+| galeriaKazimierzNew | com.skanujwygrywaj.skanujWygrywaj | development-417611 | Galeria Kazimierz New |
 
 ## Verification
 
@@ -148,23 +148,23 @@ After setup, verify:
 ```
 ios/
 ├── galeriaKazimierz/GoogleService-Info.plist
-├── kazimierzClub/GoogleService-Info.plist
-├── skanujNew/GoogleService-Info.plist
+├── galeriaKazimierzNew/GoogleService-Info.plist
+├── galeriaKazimierzNew/GoogleService-Info.plist
 ├── Flutter/
 │   ├── Debug-galeriaKazimierz.xcconfig
 │   ├── Release-galeriaKazimierz.xcconfig
-│   ├── Debug-kazimierzClub.xcconfig
-│   ├── Release-kazimierzClub.xcconfig
-│   ├── Debug-skanujNew.xcconfig
-│   └── Release-skanujNew.xcconfig
+│   ├── Debug-galeriaKazimierzNew.xcconfig
+│   ├── Release-galeriaKazimierzNew.xcconfig
+│   ├── Debug-galeriaKazimierzNew.xcconfig
+│   └── Release-galeriaKazimierzNew.xcconfig
 └── Runner/
     ├── galeriaKazimierz/
     │   ├── GoogleService-Info.plist
     │   └── Info.plist
-    ├── kazimierzClub/
+    ├── galeriaKazimierzNew/
     │   ├── GoogleService-Info.plist
     │   └── Info.plist
-    └── skanujNew/
+    └── galeriaKazimierzNew/
         ├── GoogleService-Info.plist
         └── Info.plist
 ```
