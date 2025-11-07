@@ -45,7 +45,7 @@
         <meta-data android:name="com.facebook.sdk.ClientToken" android:value="@string/facebook_client_token" />
         <provider
             android:name="com.facebook.FacebookContentProvider"
-            android:authorities="com.facebook.app.FacebookContentProvider683312195062841"
+            android:authorities="${applicationId}.FacebookContentProvider"
             android:exported="true" />
         <activity
             android:name="com.facebook.FacebookActivity"
