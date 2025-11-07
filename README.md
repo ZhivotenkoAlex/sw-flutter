@@ -1,4 +1,4 @@
-# Galeria Kazimierz New - Multi-Company Flutter Application
+# Skanuj Wygrywaj Flutter - Multi-Company Flutter Application
 
 A unified Flutter application supporting multiple companies through build flavors, featuring dynamic configuration, Firebase integration, and WebView-based content delivery.
 
@@ -43,7 +43,6 @@ flutter run --flavor galeriaKazimierz --dart-define=FLAVOR=galeriaKazimierz
 | Company               | Flavor Name           | Package ID                                                                                  | Type   |
 | --------------------- | --------------------- | ------------------------------------------------------------------------------------------- | ------ |
 | Galeria Kazimierz     | `galeriaKazimierz`    | `pl.a2ti.galeriakazimierz` (Android)<br>`it.2take.galeriakazimierz` (iOS)                   | Legacy |
-| Galeria Kazimierz New | `galeriaKazimierzNew` | `pl.a2ti.kazimierzclub`                                                                     | Legacy |
 | Galeria Kazimierz New | `galeriaKazimierzNew` | `com.skanujwygrywaj.skanuj_wygrywaj` (Android)<br>`com.skanujwygrywaj.skanujWygrywaj` (iOS) | New    |
 
 ## Building for Production
