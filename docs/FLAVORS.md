@@ -13,17 +13,18 @@
 This application uses **Flutter Build Flavors** to support multiple companies from a single codebase.
 
 Each flavor has:
+
 - Unique package/bundle identifier
-- Separate Firebase configuration  
+- Separate Firebase configuration
 - Custom app name and branding
 - Independent App Store listing
 
 ## Current Flavors
 
-| Flavor | Company | Package ID | Type | Firebase |
-|--------|---------|------------|------|---------|
-| `galeriaKazimierz` | Galeria Kazimierz | Android: `pl.a2ti.galeriakazimierz`<br>iOS: `it.2take.galeriakazimierz` | Legacy | galeria-kazimierz-827d4 |
-| `galeriaKazimierzNew` | Galeria Kazimierz New | Android: `com.skanujwygrywaj.skanuj_wygrywaj`<br>iOS: `com.skanujwygrywaj.skanujWygrywaj` | New | development-417611 |
+| Flavor                | Company               | Package ID                                                                                | Type   | Firebase                |
+| --------------------- | --------------------- | ----------------------------------------------------------------------------------------- | ------ | ----------------------- |
+| `galeriaKazimierz`    | Galeria Kazimierz     | Android: `pl.a2ti.galeriakazimierz`<br>iOS: `it.2take.galeriakazimierz`                   | Legacy | galeria-kazimierz-827d4 |
+| `galeriaKazimierzNew` | Galeria Kazimierz New | Android: `com.skanujwygrywaj.skanuj_wygrywaj`<br>iOS: `com.skanujwygrywaj.skanujWygrywaj` | New    | development-417611      |
 
 ## Using Flavors
 
@@ -36,19 +37,35 @@ flutter run --flavor galeriaKazimierz --dart-define=FLAVOR=galeriaKazimierz
 # Galeria Kazimierz New
 flutter run --flavor galeriaKazimierzNew --dart-define=FLAVOR=galeriaKazimierzNew
 
-# Galeria Kazimierz New
-flutter run --flavor galeriaKazimierzNew --dart-define=FLAVOR=galeriaKazimierzNew
+or with
+
 ```
 
 ### Build for Release
 
-**Using Build Script:**
+**Using Build Scripts:**
+
+**Build**
+
 ```bash
 ./build_flavor.sh galeriaKazimierz android release
 ./build_flavor.sh galeriaKazimierzNew ios release
 ```
 
+**Run**
+
+```bash
+# Make executable (first time only)
+chmod +x run_flavor.sh
+
+# Run any flavor (auto-cleans conflicting packages)
+./run_flavor.sh galeriaKazimierz android
+./run_flavor.sh galeriaKazimierzNew android debug
+./run_flavor.sh galeriaKazimierz ios release
+```
+
 **Manual Build:**
+
 ```bash
 # Android APK
 flutter build apk --flavor galeriaKazimierz --dart-define=FLAVOR=galeriaKazimierz
@@ -82,12 +99,14 @@ productFlavors {
 #### 2. Add Firebase Configuration
 
 **Android:**
+
 ```bash
 mkdir android/app/src/newCompany
 cp ~/Downloads/google-services.json android/app/src/newCompany/
 ```
 
 **iOS:**
+
 ```bash
 mkdir ios/newCompany ios/Runner/newCompany
 cp ~/Downloads/GoogleService-Info.plist ios/newCompany/
@@ -97,6 +116,7 @@ cp ~/Downloads/GoogleService-Info.plist ios/Runner/newCompany/
 #### 3. Create iOS Configuration Files
 
 **App Name** (`ios/Runner/newCompany/Info.plist`):
+
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -109,6 +129,7 @@ cp ~/Downloads/GoogleService-Info.plist ios/Runner/newCompany/
 ```
 
 **Bundle ID** (`ios/Flutter/Debug-newCompany.xcconfig`):
+
 ```
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"
 #include "Generated.xcconfig"
@@ -117,6 +138,7 @@ FLUTTER_FLAVOR = newCompany
 ```
 
 **Release Config** (`ios/Flutter/Release-newCompany.xcconfig`):
+
 ```
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
 #include "Generated.xcconfig"
@@ -129,6 +151,7 @@ FLUTTER_FLAVOR = newCompany
 Edit `lib/flavor_config.dart`:
 
 **Add to enum:**
+
 ```dart
 enum FlavorType {
   galeriaKazimierz,
@@ -139,13 +162,15 @@ enum FlavorType {
 }
 ```
 
-**Add to _stringToFlavorType:**
+**Add to \_stringToFlavorType:**
+
 ```dart
 case 'newCompany':
   return FlavorType.newCompany;
 ```
 
-**Add to _createFlavorConfig:**
+**Add to \_createFlavorConfig:**
+
 ```dart
 case FlavorType.newCompany:
   return FlavorConfig(
@@ -180,7 +205,7 @@ const Map<String, String> packageMappings = {
 4. Create scheme: `Product` > `Scheme` > `Manage Schemes` > `+`
 5. Configure scheme settings
 
-**See `ios/IOS_FLAVOR_SETUP.md` for detailed steps**
+**See `docs/IOS_FLAVOR_SETUP.md` for detailed steps**
 
 #### 7. Test
 
@@ -206,6 +231,7 @@ flutter run --flavor newCompany --dart-define=FLAVOR=newCompany
 **Problem:** Missing `--dart-define`
 
 **Solution:**
+
 ```bash
 flutter run --flavor galeriaKazimierz --dart-define=FLAVOR=galeriaKazimierz
 ```
@@ -213,6 +239,7 @@ flutter run --flavor galeriaKazimierz --dart-define=FLAVOR=galeriaKazimierz
 ### Firebase Initialization Failed
 
 **Check:**
+
 ```bash
 # Verify Firebase config exists
 ls android/app/src/galeriaKazimierz/google-services.json
@@ -225,19 +252,21 @@ grep "package_name" android/app/src/galeriaKazimierz/google-services.json
 ### Wrong URL Loads
 
 **Debug:**
+
 ```bash
 flutter run --verbose --flavor galeriaKazimierz --dart-define=FLAVOR=galeriaKazimierz
 # Look for: [Flavor] Initialized: Galeria Kazimierz
 ```
 
 **Fix:**
+
 1. Check `lib/flavor_config.dart`
 2. Verify company mapping
 3. Clear cache and reinstall
 
 ### iOS Build Fails
 
-**Solution:** Follow `ios/IOS_FLAVOR_SETUP.md` to configure Xcode
+**Solution:** Follow `docs/IOS_FLAVOR_SETUP.md` to configure Xcode
 
 ### App Name Not Changing
 
@@ -272,11 +301,11 @@ iOS Firebase:     ios/{flavor}/GoogleService-Info.plist
 iOS App Name:     ios/Runner/{flavor}/Info.plist
 Dart Config:      lib/flavor_config.dart
 Company Map:      lib/company_mapping.dart
-iOS Guide:        ios/IOS_FLAVOR_SETUP.md
+iOS Guide:        docs/IOS_FLAVOR_SETUP.md
 ```
 
 ## Resources
 
 - [README.md](README.md) - Main documentation
-- [ios/IOS_FLAVOR_SETUP.md](ios/IOS_FLAVOR_SETUP.md) - iOS setup
+- [docs/IOS_FLAVOR_SETUP.md](docs/IOS_FLAVOR_SETUP.md) - iOS setup
 - [build_flavor.sh](build_flavor.sh) - Build script

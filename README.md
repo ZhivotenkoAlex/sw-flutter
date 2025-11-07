@@ -40,11 +40,11 @@ flutter run --flavor galeriaKazimierz --dart-define=FLAVOR=galeriaKazimierz
 
 ### Available Companies (Flavors)
 
-| Company | Flavor Name | Package ID | Type |
-|---------|-------------|------------|------|
-| Galeria Kazimierz | `galeriaKazimierz` | `pl.a2ti.galeriakazimierz` (Android)<br>`it.2take.galeriakazimierz` (iOS) | Legacy |
-| Galeria Kazimierz New | `galeriaKazimierzNew` | `pl.a2ti.kazimierzclub` | Legacy |
-| Galeria Kazimierz New | `galeriaKazimierzNew` | `com.skanujwygrywaj.skanuj_wygrywaj` (Android)<br>`com.skanujwygrywaj.skanujWygrywaj` (iOS) | New |
+| Company               | Flavor Name           | Package ID                                                                                  | Type   |
+| --------------------- | --------------------- | ------------------------------------------------------------------------------------------- | ------ |
+| Galeria Kazimierz     | `galeriaKazimierz`    | `pl.a2ti.galeriakazimierz` (Android)<br>`it.2take.galeriakazimierz` (iOS)                   | Legacy |
+| Galeria Kazimierz New | `galeriaKazimierzNew` | `pl.a2ti.kazimierzclub`                                                                     | Legacy |
+| Galeria Kazimierz New | `galeriaKazimierzNew` | `com.skanujwygrywaj.skanuj_wygrywaj` (Android)<br>`com.skanujwygrywaj.skanujWygrywaj` (iOS) | New    |
 
 ## Building for Production
 
@@ -67,9 +67,33 @@ flutter build ios --flavor galeriaKazimierz --dart-define=FLAVOR=galeriaKazimier
 # Then create archive in Xcode for App Store submission
 ```
 
+### Run Script (Recommended)
+
+For development, use the **run script** which automatically handles package conflicts:
+
+```bash
+# Make executable (first time only)
+chmod +x run_flavor.sh
+
+# Run any flavor (auto-cleans conflicting packages)
+./run_flavor.sh galeriaKazimierz android
+./run_flavor.sh galeriaKazimierzNew android debug
+./run_flavor.sh galeriaKazimierz ios release
+```
+
+**Features:**
+
+- ✅ Automatically uninstalls conflicting flavor packages
+- ✅ Supports Android and iOS
+- ✅ Works with debug, release, and profile modes
+- ✅ Prevents Facebook Content Provider conflicts
+
 ### Build Script
 
-For convenience, use the included build script:
+For convenience
+
+For production builds, use the build script:
+, use the included build script:
 
 ```bash
 # Make executable (first time only)
@@ -87,11 +111,13 @@ chmod +x build_flavor.sh
 The app uses a three-tier configuration approach:
 
 1. **Flavor Configuration** (`lib/flavor_config.dart`)
+
    - Compile-time company identification
    - Default URLs and Firebase projects
    - Bundle ID management
 
 2. **Dynamic Configuration** (`lib/config_service.dart`)
+
    - Runtime API-based configuration
    - 1-hour intelligent caching
    - Offline fallback support
@@ -146,7 +172,7 @@ ios/
 ## Documentation
 
 - **[FLAVORS.md](FLAVORS.md)** - Complete flavor system guide
-- **[ios/IOS_FLAVOR_SETUP.md](ios/IOS_FLAVOR_SETUP.md)** - iOS configuration guide
+- **[docs/IOS_FLAVOR_SETUP.md](docs/IOS_FLAVOR_SETUP.md)** - iOS configuration guide
 - **[build_flavor.sh](build_flavor.sh)** - Build automation script
 
 ## Quick Commands
@@ -169,13 +195,47 @@ done
 ### Common Issues
 
 **"No flavor specified"**
+
 - Always include `--dart-define=FLAVOR=flavorName` with `--flavor`
 
+**"INSTALL_FAILED_CONFLICTING_PROVIDER" (ADB Error)**
+
+This error occurs when trying to install multiple flavors that share the same Facebook Content Provider:
+
+```
+INSTALL_FAILED_CONFLICTING_PROVIDER: provider name
+com.facebook.app.FacebookContentProvider683312195062841 is already used
+```
+
+**Solution 1 (Recommended):**
+
+```bash
+# Use the run script - it auto-cleans conflicting packages
+./run_flavor.sh galeriaKazimierz android
+```
+
+**Solution 2 (Manual):**
+
+```bash
+# Uninstall the other flavor first
+adb uninstall pl.a2ti.galeriakazimierz
+adb uninstall com.skanujwygrywaj.skanuj_wygrywaj
+
+# Then install your desired flavor
+flutter run --flavor galeriaKazimierz --dart-define=FLAVOR=galeriaKazimierz
+```
+
+**Why this happens:** Both flavors use the same Facebook App ID, creating identical Content Provider authorities. Android doesn't allow multiple apps with the same provider on one device.
+
+**Note:** You can only have ONE flavor installed at a time. This is normal and expected. Use `./run_flavor.sh` for seamless switching between flavors.
+
 **"Firebase initialization failed"**
+
 - Verify `google-services.json` exists in `android/app/src/{flavor}/`
 - Check package ID matches between build config and Firebase
 
 **"Wrong URL loads"**
+
 - Check flavor configuration in `lib/flavor_config.dart`
 - Verify API response if using real endpoint
 
@@ -183,7 +243,7 @@ See [FLAVORS.md](FLAVORS.md) for comprehensive troubleshooting.
 
 ## iOS Setup
 
-iOS flavors require one-time Xcode configuration. See `ios/IOS_FLAVOR_SETUP.md` for complete instructions.
+iOS flavors require one-time Xcode configuration. See `docs/IOS_FLAVOR_SETUP.md` for complete instructions.
 
 ## Adding New Companies
 
@@ -192,6 +252,7 @@ See [FLAVORS.md](FLAVORS.md) for step-by-step guide on adding new companies/flav
 ## Support
 
 For issues or questions:
+
 1. Check [FLAVORS.md](FLAVORS.md) troubleshooting section
 2. Review flavor configuration files
 3. Verify Firebase configs match package IDs
