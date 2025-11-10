@@ -13,6 +13,7 @@ import 'package:flutter/foundation.dart'; // for kDebugMode
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'app_config.dart';
+import 'services/secure_config_service.dart';
 
 class WebViewScreen extends StatefulWidget {
   final AppConfig config;
@@ -696,9 +697,53 @@ class _WebViewScreenState extends State<WebViewScreen> {
   @override
   Widget build(BuildContext context) {
     final initialUrl = widget.config.webviewUrl;
+    
+    // Determine mode from configuration
+    final bool isLegacyMode = widget.config is SecureAppConfig 
+        ? (widget.config as SecureAppConfig).isLegacy 
+        : true;
+    final String modeLabel = isLegacyMode ? 'Legacy' : 'Modern';
+    final Color modeColor = isLegacyMode ? Colors.blue : Colors.deepPurple;
+    
+    print('[WebViewScreen] Loading $modeLabel mode, URL: $initialUrl');
+    
     return Scaffold(
-      body: SafeArea(
-        child: InAppWebView(
+      body: Column(
+        children: [
+          // Mode indicator (shown only in debug mode)
+          if (kDebugMode)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+              color: modeColor.withOpacity(0.9),
+              child: SafeArea(
+                bottom: false,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      isLegacyMode ? Icons.history : Icons.rocket_launch,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$modeLabel Mode',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          // WebView
+          Expanded(
+            child: SafeArea(
+              top: !kDebugMode, // If not debug, add top SafeArea
+              child: InAppWebView(
           initialUrlRequest: URLRequest(url: WebUri(initialUrl)),
           initialSettings: InAppWebViewSettings(
             javaScriptEnabled: true,
@@ -2254,7 +2299,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
             return JsPromptResponse(handledByClient: false);
           },
         ),
-      ),
+              ), // SafeArea
+            ), // Expanded
+          ], // children of Column
+        ), // Column (body of Scaffold)
       // floatingActionButton: kDebugMode ? FloatingActionButton.small(
       //   onPressed: _setCustomUrlDialog,
       //   child: const Icon(Icons.link),

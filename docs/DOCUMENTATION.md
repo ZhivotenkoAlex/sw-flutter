@@ -9,15 +9,18 @@ New to the project? Read these in order:
 1. **[README.md](../README.md)** - Project overview, quick start, troubleshooting
 2. **[FLAVORS_GUIDE.md](FLAVORS_GUIDE.md)** - Android & iOS flavor setup (required for development)
 3. **[FIREBASE_CONFIG.md](FIREBASE_CONFIG.md)** - Firebase configuration and updates
+4. **[DYNAMIC_CONFIGURATION.md](DYNAMIC_CONFIGURATION.md)** - Dynamic app configuration (change without release)
 
 ---
 
 ## 📖 Documentation Files
 
 ### [README.md](../README.md)
+
 **Main project documentation**
 
 What you'll find:
+
 - ✅ Project overview and features
 - ✅ Quick start installation
 - ✅ How to run the app
@@ -30,9 +33,11 @@ What you'll find:
 ---
 
 ### [FLAVORS_GUIDE.md](FLAVORS_GUIDE.md)
+
 **Complete flavor setup guide for Android & iOS**
 
 What you'll find:
+
 - ✅ What flavors are and why we use them
 - ✅ Step-by-step Android flavor setup
 - ✅ Step-by-step iOS flavor setup (Xcode configuration)
@@ -40,7 +45,8 @@ What you'll find:
 - ✅ Testing flavors checklist
 - ✅ Flavor-specific troubleshooting
 
-**Read this:** 
+**Read this:**
+
 - When setting up the project for the first time
 - When adding a new company/flavor
 - When iOS flavor commands don't work
@@ -49,9 +55,11 @@ What you'll find:
 ---
 
 ### [FIREBASE_CONFIG.md](FIREBASE_CONFIG.md)
+
 **Firebase configuration and management**
 
 What you'll find:
+
 - ✅ Dual Firebase app architecture explanation
 - ✅ Firebase project details (galeria-kazimierz-827d4 vs development-417611)
 - ✅ Config file locations and structure
@@ -61,6 +69,7 @@ What you'll find:
 - ✅ Firebase-specific troubleshooting
 
 **Read this:**
+
 - When updating Firebase settings
 - When adding new Firebase projects
 - When changing API keys or credentials
@@ -70,9 +79,11 @@ What you'll find:
 ---
 
 ### [scripts/README.md](../scripts/README.md)
+
 **Firestore population scripts**
 
 What you'll find:
+
 - ✅ How to populate Firestore with configs
 - ✅ How to verify Firestore data
 - ✅ Script prerequisites and setup
@@ -82,43 +93,86 @@ What you'll find:
 
 ---
 
+### [DYNAMIC_CONFIGURATION.md](DYNAMIC_CONFIGURATION.md)
+
+**Dynamic App Configuration via Firestore**
+
+What you'll find:
+
+- ✅ How to change app behavior without releasing new version
+- ✅ Step-by-step instructions for Android & iOS
+- ✅ Switching companies and databases dynamically
+- ✅ UI theme switching (Legacy/Modern)
+- ✅ Gradual rollout and instant rollback scenarios
+- ✅ Complete testing guide
+- ✅ Production deployment workflow
+- ✅ Troubleshooting common issues
+
+**Read this:** When you need to change app configuration, switch companies, or do gradual rollouts without releasing a new app version.
+
+---
+
 ## 🗺️ Documentation Map by Task
 
 ### "I want to install and run the app"
+
 → [README.md](../README.md) - Quick Start section
 
 ### "I need to set up flavors on Android"
+
 → [FLAVORS_GUIDE.md](FLAVORS_GUIDE.md#android-flavor-setup)
 
 ### "I need to set up flavors on iOS"
+
 → [FLAVORS_GUIDE.md](FLAVORS_GUIDE.md#ios-flavor-setup)
 
 ### "I want to add a new company/flavor"
+
 → [FLAVORS_GUIDE.md](FLAVORS_GUIDE.md#adding-a-new-flavor)
 
 ### "I need to update Firebase credentials"
+
 → [FIREBASE_CONFIG.md](FIREBASE_CONFIG.md#updating-configs)
 
 ### "I need to change the webview URL"
+
 → [FIREBASE_CONFIG.md](FIREBASE_CONFIG.md#scenario-2-update-firestore-configs)
 
 ### "I want to understand the Firebase architecture"
+
 → [FIREBASE_CONFIG.md](FIREBASE_CONFIG.md#architecture-overview)
 
 ### "The app won't build/run"
+
 → [README.md](../README.md#troubleshooting) first, then flavor-specific guide
 
 ### "I'm getting INSTALL_FAILED_CONFLICTING_PROVIDER"
+
 → [README.md](../README.md#-install_failed_conflicting_provider) or use `./run_flavor.sh`
 
 ### "Xcode says no custom schemes"
+
 → [FLAVORS_GUIDE.md](FLAVORS_GUIDE.md#ios-flavor-setup)
 
 ### "Firebase initialization failed"
+
 → [FIREBASE_CONFIG.md](FIREBASE_CONFIG.md#-firebase-initialization-failed)
 
 ### "Config not found in Firestore"
+
 → [FIREBASE_CONFIG.md](FIREBASE_CONFIG.md#-config-not-found-in-firestore)
+
+### "I want to change app configuration without new release"
+
+→ [DYNAMIC_CONFIGURATION.md](DYNAMIC_CONFIGURATION.md)
+
+### "I need to switch companies or databases"
+
+→ [DYNAMIC_CONFIGURATION.md](DYNAMIC_CONFIGURATION.md#step-by-step-instructions)
+
+### "I need to do a gradual rollout or rollback"
+
+→ [DYNAMIC_CONFIGURATION.md](DYNAMIC_CONFIGURATION.md#production-deployment)
 
 ---
 
@@ -148,6 +202,7 @@ flutter clean && flutter pub get
 ## 📁 Key Files to Know
 
 ### Configuration Files
+
 ```
 lib/flavor_config.dart          - Flavor definitions
 lib/company_mapping.dart        - Package ID to company mapping
@@ -155,18 +210,21 @@ lib/services/secure_config_service.dart  - Firestore config fetching
 ```
 
 ### Android Config
+
 ```
 android/app/build.gradle.kts    - Flavor definitions
 android/app/src/{flavor}/google-services.json  - Firebase configs
 ```
 
 ### iOS Config
+
 ```
 ios/Runner.xcworkspace          - Open in Xcode
 ios/Runner/{flavor}/GoogleService-Info.plist  - Firebase configs
 ```
 
 ### Scripts
+
 ```
 scripts/populate_firestore_config.js  - Populate Firestore
 scripts/verify_firestore_data.js      - Verify Firestore
@@ -195,11 +253,12 @@ When onboarding a new developer, ensure they:
 1. **Search the documentation:** Use Cmd+F / Ctrl+F in the relevant guide
 2. **Check troubleshooting sections:** Each guide has flavor/platform-specific troubleshooting
 3. **Verify your setup:**
+
    ```bash
    # Check config files exist
    ls -la android/app/src/*/google-services.json
    ls -la ios/Runner/*/GoogleService-Info.plist
-   
+
    # Verify Firestore
    cd scripts && node verify_firestore_data.js
    ```
@@ -216,4 +275,3 @@ When onboarding a new developer, ensure they:
 **Documentation Version:** 1.0  
 **Last Updated:** November 2025  
 **Flavors:** galeriaKazimierz, galeriaKazimierzNew
-

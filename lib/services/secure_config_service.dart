@@ -11,6 +11,7 @@ class SecureAppConfig extends AppConfig {
   final Map<String, dynamic> firebaseConfigAndroid;
   final Map<String, dynamic> firebaseConfigIOS;
   final int version;
+  final String companyId; // Company ID for API calls and logic
 
   SecureAppConfig({
     required super.webviewUrl,
@@ -20,6 +21,7 @@ class SecureAppConfig extends AppConfig {
     required this.firebaseConfigAndroid,
     required this.firebaseConfigIOS,
     required this.version,
+    required this.companyId,
   });
 
   factory SecureAppConfig.fromFirestore(DocumentSnapshot doc) {
@@ -27,6 +29,9 @@ class SecureAppConfig extends AppConfig {
     
     print('[SecureConfig] Parsing Firestore document...');
     print('[SecureConfig] Available keys: ${data.keys.toList()}');
+
+    final companyId = data['companyId'] as String;
+    print('[SecureConfig] Loaded companyId: $companyId');
 
     return SecureAppConfig(
       webviewUrl: data['webviewUrl'] as String,
@@ -36,6 +41,7 @@ class SecureAppConfig extends AppConfig {
       firebaseConfigAndroid: data['firebaseConfigAndroid'] as Map<String, dynamic>,
       firebaseConfigIOS: data['firebaseConfigIOS'] as Map<String, dynamic>,
       version: data['version'] as int? ?? 1,
+      companyId: companyId,
     );
   }
 
@@ -48,6 +54,7 @@ class SecureAppConfig extends AppConfig {
       firebaseConfigAndroid: json['firebaseConfigAndroid'] as Map<String, dynamic>,
       firebaseConfigIOS: json['firebaseConfigIOS'] as Map<String, dynamic>,
       version: json['version'] as int? ?? 1,
+      companyId: json['companyId'] as String,
     );
   }
 
@@ -57,6 +64,7 @@ class SecureAppConfig extends AppConfig {
     baseJson['firebaseConfigAndroid'] = firebaseConfigAndroid;
     baseJson['firebaseConfigIOS'] = firebaseConfigIOS;
     baseJson['version'] = version;
+    baseJson['companyId'] = companyId;
     return baseJson;
   }
 

@@ -150,12 +150,13 @@ In Xcode:
 
 ## 📚 Documentation
 
-| Document                                          | Description                                   |
-| ------------------------------------------------- | --------------------------------------------- |
-| **[FLAVORS_GUIDE.md](docs/FLAVORS_GUIDE.md)**     | Complete guide for Android & iOS flavor setup |
-| **[FIREBASE_CONFIG.md](docs/FIREBASE_CONFIG.md)** | How to update and manage Firebase configs     |
-| **[DOCUMENTATION.md](docs/DOCUMENTATION.md)**     | Complete documentation index and guide        |
-| **[scripts/README.md](scripts/README.md)**        | Firestore population scripts documentation    |
+| Document                                                      | Description                                          |
+| ------------------------------------------------------------- | ---------------------------------------------------- |
+| **[FLAVORS_GUIDE.md](docs/FLAVORS_GUIDE.md)**                 | Complete guide for Android & iOS flavor setup        |
+| **[FIREBASE_CONFIG.md](docs/FIREBASE_CONFIG.md)**             | How to update and manage Firebase configs            |
+| **[DYNAMIC_CONFIGURATION.md](docs/DYNAMIC_CONFIGURATION.md)** | Dynamic app configuration via Firestore (no release) |
+| **[DOCUMENTATION.md](docs/DOCUMENTATION.md)**                 | Complete documentation index and guide               |
+| **[scripts/README.md](scripts/README.md)**                    | Firestore population scripts documentation           |
 
 ---
 
@@ -268,10 +269,31 @@ Initialize Bootstrap Firebase (development-417611)
    ↓
 Fetch Config from Firestore (mobile_configs/{companyId})
    ↓
+Check isLegacy flag → Apply Legacy or Modern theme
+   ↓
 Initialize Firebase Messaging (flavor-specific project)
    ↓
 Load WebView with dynamic URL
 ```
+
+### Dynamic Configuration
+
+The app loads configuration from Firestore at runtime, allowing changes **without releasing a new version**:
+
+- **`companyId`** → Company ID for API calls (can switch databases!)
+- **`webviewUrl`** → URL to load in WebView
+- **`isLegacy`** → UI theme (blue = legacy, purple = modern)
+- **Firebase credentials** → Can be updated dynamically
+
+**Benefits:**
+
+- ✅ Change configuration without app release
+- ✅ Switch companies/databases instantly
+- ✅ Gradual rollout to users
+- ✅ Instant rollback if issues occur
+- ✅ A/B testing capabilities
+
+See [DYNAMIC_CONFIGURATION.md](docs/DYNAMIC_CONFIGURATION.md) for complete guide.
 
 ---
 

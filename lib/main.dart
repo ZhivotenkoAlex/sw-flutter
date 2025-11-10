@@ -98,12 +98,42 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Determine theme based on isLegacy from configuration
+    final bool isLegacyMode = config?.isLegacy ?? true;
+    final String modeLabel = isLegacyMode ? 'Legacy Mode' : 'Modern Mode';
+    
+    print('[MyApp] UI Mode: $modeLabel (isLegacy=$isLegacyMode)');
+    
+    // Different themes for legacy and new mode
+    final ThemeData appTheme = isLegacyMode 
+      ? ThemeData(
+          // Legacy mode - traditional colors
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.blue,
+            brightness: Brightness.light,
+          ),
+          useMaterial3: true,
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+          ),
+        )
+      : ThemeData(
+          // New mode - modern colors
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.deepPurple,
+            brightness: Brightness.light,
+          ),
+          useMaterial3: true,
+          appBarTheme: AppBarTheme(
+            backgroundColor: Colors.deepPurple.shade700,
+            foregroundColor: Colors.white,
+          ),
+        );
+    
     return MaterialApp(
-      title: 'Skanuj Wygrywaj',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
+      title: isLegacyMode ? 'Skanuj Wygrywaj' : 'Skanuj Wygrywaj New',
+      theme: appTheme,
       home: config != null 
         ? WebViewScreen(config: config!)
         : const Scaffold(

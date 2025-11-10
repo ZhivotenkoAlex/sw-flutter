@@ -2,6 +2,10 @@
 
 This directory contains utility scripts for managing the Flutter application.
 
+## Quick Start
+
+For a quick guide on switching between old and new app configurations, see **[QUICK_GUIDE.md](QUICK_GUIDE.md)**.
+
 ## populate_firestore_config.js
 
 Populates the Firestore `mobile_configs` collection with secure configuration data for both flavors.
