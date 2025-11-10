@@ -65,7 +65,7 @@ const newConfig = {
 async function updateConfig() {
     console.log('\n🔄 Updating galeria-kazimierz to NEW app configuration...\n');
 
-    const documentId = 'galeria-kazimierz';
+    const documentId = 'kazimierz-club-new';
 
     try {
         // Show what we're about to change

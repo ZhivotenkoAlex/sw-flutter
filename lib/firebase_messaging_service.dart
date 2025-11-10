@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'app_config.dart';
 import 'firebase_config_loader.dart';
 
@@ -20,43 +22,170 @@ class FirebaseMessagingService {
   static String? _loyaltyCompany;
   static String? _loyaltyUid;
   static String? _cachedPackageId;
+  // Named Firebase app for messaging (allows switching projects dynamically)
+  // Note: Currently using default app approach due to FirebaseMessaging API limitations
+  static FirebaseApp? _messagingApp;
 
   static Future<void> initialize({AppConfig? config}) async {
     try {
       print('[FCM] initialize() start');
       
-      // Check if Firebase is already initialized
-      try {
-        final existingApp = Firebase.app();
-        print('[FCM] Firebase already initialized, using existing app: ${existingApp.name}');
-        try { print('[FCM] projectId=' + (existingApp.options.projectId ?? '-')); } catch (_) {}
-      } catch (e) {
-        // Firebase not initialized, initialize it now
-        print('[FCM] Firebase not initialized, initializing now...');
-        if (config != null) {
-          final firebaseOptions = await FirebaseConfigLoader.loadFirebaseOptions(config);
-          await Firebase.initializeApp(options: firebaseOptions);
-        } else {
+      if (config == null) {
+        print('[FCM] No config provided, using default Firebase initialization');
+        try {
           await Firebase.initializeApp();
+        } catch (e) {
+          print('[FCM] Firebase already initialized or error: $e');
         }
         try { print('[FCM] projectId=' + (Firebase.app().options.projectId ?? '-')); } catch (_) {}
+      } else {
+        // Get Firebase options from config
+        final firebaseOptions = await FirebaseConfigLoader.loadFirebaseOptions(config);
+        final expectedProjectId = firebaseOptions.projectId;
+        print('[FCM] Expected project from config: $expectedProjectId');
+        
+        // Strategy: Initialize DEFAULT app with config's project
+        // Bootstrap does NOT initialize default app, so we can initialize it here
+        // with the correct project from config
+        bool needsInit = false;
+        
+        // Check if default app exists and matches config
+        try {
+          final existingApp = Firebase.app();
+          final currentProjectId = existingApp.options.projectId;
+          print('[FCM] Default app exists, current project: $currentProjectId');
+          
+          // Check if project matches config
+          if (currentProjectId != expectedProjectId) {
+            print('[FCM] ⚠️ Project mismatch! Current: $currentProjectId, Expected: $expectedProjectId');
+            // On Android, default app cannot be deleted, so we log a warning
+            // On iOS, we can try to delete and reinitialize
+            if (Platform.isAndroid) {
+              print('[FCM] ⚠️ Android: Cannot delete default app. Messaging will use existing project.');
+              print('[FCM] ⚠️ To switch projects, app must be reinstalled or use a different approach.');
+              // Save current app options anyway
+              try {
+                await _saveMessagingAppOptions(existingApp.options);
+              } catch (e) {
+                print('[FCM] Error saving app options: $e');
+              }
+              // Continue execution - we'll use the existing app
+              // FCM token will be obtained from the existing project
+            } else {
+              // iOS: Try to delete and reinitialize
+              print('[FCM] iOS: Will try to delete and reinitialize default app');
+              needsInit = true;
+            }
+          } else {
+            print('[FCM] ✅ Project matches config, using existing default app');
+            // Save current app options for background handler
+            try {
+              await _saveMessagingAppOptions(existingApp.options);
+            } catch (e) {
+              print('[FCM] Error saving app options: $e');
+            }
+          }
+        } catch (e) {
+          // Default app doesn't exist, create it
+          print('[FCM] Default app not found, will create it');
+          needsInit = true;
+        }
+        
+        // Initialize default app if needed
+        if (needsInit) {
+          // Clear old token when switching projects
+          final oldToken = _fcmToken;
+          if (oldToken != null) {
+            print('[FCM] Clearing old token from previous project (tokenLen=${oldToken.length})');
+            _fcmToken = null;
+            _lastSentToken = null;
+          }
+          
+          // On iOS, try to delete default app before reinitializing
+          if (Platform.isIOS) {
+            try {
+              await Firebase.app().delete();
+              print('[FCM] Deleted existing default app (iOS)');
+            } catch (e) {
+              print('[FCM] Could not delete default app (iOS): $e');
+            }
+          }
+          
+          // Initialize default app with config's Firebase options
+          try {
+            await Firebase.initializeApp(options: firebaseOptions);
+            print('[FCM] ✅ Initialized default app with project: $expectedProjectId');
+            
+            // Enable App Check for the default app
+            try {
+              await FirebaseAppCheck.instance.activate(
+                androidProvider: AndroidProvider.playIntegrity,
+                appleProvider: AppleProvider.deviceCheck,
+              );
+              print('[FCM] App Check enabled for default app');
+            } catch (e) {
+              print('[FCM] App Check enable error: $e');
+            }
+            
+            // On iOS, ensure APNs token is set after re-initialization
+            if (Platform.isIOS) {
+              try {
+                // Request APNs token - this will trigger AppDelegate to set it
+                final apnsToken = await FirebaseMessaging.instance.getAPNSToken();
+                if (apnsToken != null) {
+                  print('[FCM] ✅ APNs token available after re-init: ${apnsToken.substring(0, 20)}...');
+                } else {
+                  print('[FCM] ⚠️ APNs token not available yet (will be set by AppDelegate)');
+                }
+              } catch (e) {
+                print('[FCM] APNs token check error: $e');
+              }
+            }
+            
+            // Save messaging app options to SharedPreferences for background handler
+            await _saveMessagingAppOptions(firebaseOptions);
+          } catch (e) {
+            print('[FCM] Error initializing default app: $e');
+            // If initialization fails, try to use existing app
+            try {
+              final existingApp = Firebase.app();
+              print('[FCM] ⚠️ Using existing default app: ${existingApp.options.projectId}');
+              if (existingApp.options.projectId != expectedProjectId) {
+                print('[FCM] ⚠️ WARNING: Project mismatch! Messaging may not work correctly.');
+              }
+              // Save existing app options anyway
+              await _saveMessagingAppOptions(existingApp.options);
+            } catch (_) {
+              print('[FCM] No Firebase app available');
+            }
+          }
+        }
       }
-      await FirebaseMessaging.instance.setAutoInitEnabled(true);
+      
+      // Use default FirebaseMessaging instance
+      // Note: onMessage and onMessageOpenedApp are static and work with default app only
+      final messaging = FirebaseMessaging.instance;
+      
+      await messaging.setAutoInitEnabled(true);
       // Proactively ensure permission at startup, but only if not decided yet
-      await _ensurePermissionIfNeeded();
+      await _ensurePermissionIfNeeded(messaging: messaging);
 
-      _fcmToken = await FirebaseMessaging.instance.getToken();
-      print('[FCM] initial FCM token: ' + (_fcmToken ?? 'null'));
+      _fcmToken = await messaging.getToken();
+      print('[FCM] ✅ Initial FCM token obtained: ${_fcmToken != null ? 'tokenLen=${_fcmToken!.length}' : 'null'}');
+      if (_fcmToken != null) {
+        print('[FCM] Token preview: ${_fcmToken!.substring(0, _fcmToken!.length > 50 ? 50 : _fcmToken!.length)}...');
+      }
 
       // If API client configured and we have a user, the host code can call
       // registerToken(userId) afterwards. We only set up refresh forwarding here.
-      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+      messaging.onTokenRefresh.listen((newToken) async {
         _fcmToken = newToken;
         print('[FCM] onTokenRefresh -> ' + (newToken));
         await _autoUpsertIfPossible();
         await _autoRegister2TakeIfPossible();
       });
 
+      // Use static methods for listeners (these work with the default app)
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         try {
           final messageId = message.messageId ?? 'null';
@@ -89,27 +218,70 @@ class FirebaseMessagingService {
   static String? get fcmToken => _fcmToken;
   static bool get isInitialized => _initialized;
 
+  // Save messaging app options for background handler
+  static Future<void> _saveMessagingAppOptions(FirebaseOptions options) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('fcm_messaging_app_project_id', options.projectId ?? '');
+      await prefs.setString('fcm_messaging_app_api_key', options.apiKey ?? '');
+      await prefs.setString('fcm_messaging_app_app_id', options.appId ?? '');
+      await prefs.setString('fcm_messaging_app_messaging_sender_id', options.messagingSenderId ?? '');
+      await prefs.setString('fcm_messaging_app_storage_bucket', options.storageBucket ?? '');
+      await prefs.setString('fcm_messaging_app_database_url', options.databaseURL ?? '');
+      if (Platform.isIOS && options.iosBundleId != null) {
+        await prefs.setString('fcm_messaging_app_ios_bundle_id', options.iosBundleId!);
+      }
+      print('[FCM] Saved messaging app options for background handler');
+    } catch (e) {
+      print('[FCM] Error saving messaging app options: $e');
+    }
+  }
+
+  // Load messaging app options for background handler
+  static Future<FirebaseOptions?> _loadMessagingAppOptions() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final projectId = prefs.getString('fcm_messaging_app_project_id');
+      if (projectId == null || projectId.isEmpty) return null;
+      
+      return FirebaseOptions(
+        apiKey: prefs.getString('fcm_messaging_app_api_key') ?? '',
+        appId: prefs.getString('fcm_messaging_app_app_id') ?? '',
+        messagingSenderId: prefs.getString('fcm_messaging_app_messaging_sender_id') ?? '',
+        projectId: projectId,
+        storageBucket: prefs.getString('fcm_messaging_app_storage_bucket'),
+        databaseURL: prefs.getString('fcm_messaging_app_database_url'),
+        iosBundleId: Platform.isIOS ? prefs.getString('fcm_messaging_app_ios_bundle_id') : null,
+      );
+    } catch (e) {
+      print('[FCM] Error loading messaging app options: $e');
+      return null;
+    }
+  }
+
   // ---------- API helpers -------------------------------------------------
 
   static Future<String?> _awaitFcmToken({Duration timeout = const Duration(seconds: 8)}) async {
     print('[FCM] _awaitFcmToken() begin, current=' + (_fcmToken ?? 'null'));
+    // Use default messaging instance
+    final messaging = FirebaseMessaging.instance;
     // Ensure permission only if not granted
-    await _ensurePermissionIfNeeded();
-    var t = _fcmToken ?? await FirebaseMessaging.instance.getToken();
+    await _ensurePermissionIfNeeded(messaging: messaging);
+    var t = _fcmToken ?? await messaging.getToken();
     if (t != null && t.isNotEmpty) { 
       _fcmToken = t; 
       print('[FCM] _awaitFcmToken() immediate token=' + t);
       return t; 
     }
     try { 
-      t = await FirebaseMessaging.instance.onTokenRefresh.first.timeout(timeout); 
+      t = await messaging.onTokenRefresh.first.timeout(timeout); 
       print('[FCM] _awaitFcmToken() from onTokenRefresh token=' + (t ?? 'null')); 
     } catch (e) { 
       print('[FCM] _awaitFcmToken() refresh timeout/error: ' + e.toString()); 
     }
     if (t == null || t.isEmpty) {
       try { 
-        t = await FirebaseMessaging.instance.getToken(); 
+        t = await messaging.getToken(); 
         print('[FCM] getToken after permission token=' + (t ?? 'null')); 
       } catch (e) { 
         print('[FCM] getToken error: ' + e.toString()); 
@@ -120,18 +292,19 @@ class FirebaseMessagingService {
     return t;
   }
 
-  static Future<bool> _ensurePermissionIfNeeded() async {
+  static Future<bool> _ensurePermissionIfNeeded({FirebaseMessaging? messaging}) async {
+    final messagingInstance = messaging ?? FirebaseMessaging.instance;
     try {
-      final settings = await FirebaseMessaging.instance.getNotificationSettings();
+      final settings = await messagingInstance.getNotificationSettings();
       final status = settings.authorizationStatus;
       print('[FCM] permission status: ' + status.toString());
       // Already granted (full or provisional)
       if (status == AuthorizationStatus.authorized || status == AuthorizationStatus.provisional) {
         if (Platform.isIOS) {
           try {
-            final apns = await FirebaseMessaging.instance.getAPNSToken();
+            final apns = await messagingInstance.getAPNSToken();
             print('[FCM] APNs token: ' + (apns ?? 'null'));
-            await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+            await messagingInstance.setForegroundNotificationPresentationOptions(
               alert: true, badge: true, sound: true,
             );
           } catch (e) { print('[FCM] getAPNSToken error: ' + e.toString()); }
@@ -142,16 +315,16 @@ class FirebaseMessagingService {
       if (status == AuthorizationStatus.notDetermined) {
         if (Platform.isIOS) {
           // Request full permission on iOS so alerts/badges/sounds show immediately
-          final perm = await FirebaseMessaging.instance.requestPermission(
+          final perm = await messagingInstance.requestPermission(
             alert: true, badge: true, sound: true, provisional: false,
           );
           final ok = perm.authorizationStatus == AuthorizationStatus.authorized ||
               perm.authorizationStatus == AuthorizationStatus.provisional;
           if (ok) {
             try {
-              final apns = await FirebaseMessaging.instance.getAPNSToken();
+              final apns = await messagingInstance.getAPNSToken();
               print('[FCM] APNs token (post-request): ' + (apns ?? 'null'));
-              await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+              await messagingInstance.setForegroundNotificationPresentationOptions(
                 alert: true, badge: true, sound: true,
               );
             } catch (e) { print('[FCM] getAPNSToken error: ' + e.toString()); }
@@ -159,7 +332,7 @@ class FirebaseMessagingService {
           return ok;
         } else {
           // Android: normal prompt
-          final perm = await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);
+          final perm = await messagingInstance.requestPermission(alert: true, badge: true, sound: true);
           return perm.authorizationStatus == AuthorizationStatus.authorized;
         }
       }
@@ -167,7 +340,7 @@ class FirebaseMessagingService {
       if (status == AuthorizationStatus.denied) {
         // Android can re-prompt; iOS must go to Settings
         if (Platform.isAndroid) {
-          final perm = await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);
+          final perm = await messagingInstance.requestPermission(alert: true, badge: true, sound: true);
           return perm.authorizationStatus == AuthorizationStatus.authorized;
         }
         return false;
@@ -182,10 +355,11 @@ class FirebaseMessagingService {
   // Public helper: explicitly request notification permission (useful for a settings screen button)
   static Future<AuthorizationStatus> requestNotificationsPermission() async {
     try {
-      final result = await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);
+      final messaging = FirebaseMessaging.instance;
+      final result = await messaging.requestPermission(alert: true, badge: true, sound: true);
       print('[FCM] requestPermission -> ' + result.authorizationStatus.toString());
       if (Platform.isIOS) {
-        try { final apns = await FirebaseMessaging.instance.getAPNSToken(); print('[FCM] APNs token (post-request explicit): ' + (apns ?? 'null')); } catch (e) { print('[FCM] getAPNSToken error: ' + e.toString()); }
+        try { final apns = await messaging.getAPNSToken(); print('[FCM] APNs token (post-request explicit): ' + (apns ?? 'null')); } catch (e) { print('[FCM] getAPNSToken error: ' + e.toString()); }
       }
       return result.authorizationStatus;
     } catch (e) {

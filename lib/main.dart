@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'webview_screen.dart';
 import 'firebase_messaging_service.dart';
 import 'config_service.dart';
@@ -9,13 +11,57 @@ import 'services/secure_config_service.dart';
 import 'firebase_config_loader.dart';
 import 'flavor_config.dart';
 
+// Helper function to load messaging app options in background handler
+Future<FirebaseOptions?> _loadMessagingAppOptionsFromPrefs() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final projectId = prefs.getString('fcm_messaging_app_project_id');
+    if (projectId == null || projectId.isEmpty) return null;
+    
+    return FirebaseOptions(
+      apiKey: prefs.getString('fcm_messaging_app_api_key') ?? '',
+      appId: prefs.getString('fcm_messaging_app_app_id') ?? '',
+      messagingSenderId: prefs.getString('fcm_messaging_app_messaging_sender_id') ?? '',
+      projectId: projectId,
+      storageBucket: prefs.getString('fcm_messaging_app_storage_bucket'),
+      databaseURL: prefs.getString('fcm_messaging_app_database_url'),
+      iosBundleId: Platform.isIOS ? prefs.getString('fcm_messaging_app_ios_bundle_id') : null,
+    );
+  } catch (e) {
+    return null;
+  }
+}
+
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Required for iOS/macOS background isolates
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await Firebase.initializeApp();
-  } catch (_) {}
+    // Try to initialize default app with saved options from foreground
+    // With FirebaseAppDelegateProxyEnabled=false, we control initialization
+    final savedOptions = await _loadMessagingAppOptionsFromPrefs();
+    if (savedOptions != null) {
+      try {
+        await Firebase.initializeApp(options: savedOptions);
+        print('[FCM][bg] Initialized default app with saved options (project: ${savedOptions.projectId})');
+      } catch (e) {
+        // Default app might already exist, that's okay
+        print('[FCM][bg] Default app already exists or error: $e');
+      }
+    } else {
+      // Fallback to bootstrap options if no saved options
+      try {
+        await Firebase.initializeApp(options: FirebaseConfigLoader.getBootstrapOptions());
+        print('[FCM][bg] Initialized default app with bootstrap options');
+      } catch (e) {
+        // Default app might already exist, that's okay
+        print('[FCM][bg] Default app init error: $e');
+      }
+    }
+  } catch (e) {
+    print('[FCM][bg] Firebase init error: $e');
+  }
+  
   try {
     final messageId = message.messageId ?? 'null';
     final sentTime = message.sentTime?.toString() ?? 'null';
@@ -58,20 +104,17 @@ void main() async {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     
     try {
-      // Firebase is already initialized with bootstrap config
-      // We'll use that for the app since it's already connected to development-417611
-      print('[Main] Using bootstrap Firebase app (already initialized)');
-      print('[Main] Firebase project: ${config.firebaseProject}');
+      // FirebaseMessagingService.initialize() will:
+      // 1. Check if default Firebase app matches config's project
+      // 2. If not, delete and re-initialize with config's Firebase options
+      // 3. This allows dynamic switching between Firebase projects
+      print('[Main] Initializing Firebase Messaging with config project: ${config.firebaseProject}');
       
-      // Initialize Firebase Messaging Service
+      // Initialize Firebase Messaging Service (handles Firebase re-initialization)
       await FirebaseMessagingService.initialize(config: config);
       
-      // Initialize Firebase Messaging
-      await FirebaseMessaging.instance.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
+      // Request permission (FirebaseMessagingService handles the messaging instance)
+      // Note: Permission is already requested in FirebaseMessagingService.initialize()
       
       // Configure API with hardcoded backend URL (same for all flavors)
       FirebaseMessagingService.configureApi(
@@ -89,7 +132,7 @@ void main() async {
   
   // 3. Run app with config (use a fallback if config failed to load)
   if (config != null) {
-    runApp(MyApp(config: config));
+  runApp(MyApp(config: config));
   } else {
     // Fallback for web or if config fetch failed
     print('[Main] Running with fallback configuration');

@@ -99,68 +99,51 @@ class SecureConfigService {
 
   static SecureAppConfig? _memoryCache;
 
-  /// Initialize Firebase with bootstrap config and enable App Check
+  /// Initialize Firebase with bootstrap config for Firestore config fetching
   /// 
-  /// Creates TWO Firebase apps:
-  /// 1. DEFAULT app (from plist/google-services.json) - for Firebase Messaging
-  /// 2. NAMED "config" app - for Firestore config fetching from development-417611
+  /// Creates DEFAULT Firebase app if not exists + NAMED "config" app for Firestore
+  /// 
+  /// CRITICAL: FirebaseFirestore.instanceFor() requires DEFAULT app internally,
+  /// even when using named app. So we must ensure DEFAULT app exists first.
   static Future<void> initializeBootstrapFirebase({
     required FirebaseOptions bootstrapOptions,
   }) async {
-    // Step 1: Ensure default app exists
-    bool defaultAppExists = false;
+    // Step 1: Ensure DEFAULT app exists (required by Firestore plugin internals)
     try {
-      final existingApp = Firebase.app();
-      defaultAppExists = true;
-      print('[SecureConfig] Default Firebase app exists: ${existingApp.options.projectId}');
+      final defaultApp = Firebase.app();
+      print('[SecureConfig] DEFAULT app already exists: ${defaultApp.options.projectId}');
     } catch (e) {
-      print('[SecureConfig] No default Firebase app, will create it');
-    }
-    
-    // Initialize DEFAULT app if it doesn't exist
-    if (!defaultAppExists) {
+      // DEFAULT app doesn't exist, create it with bootstrap options
       try {
-        await Firebase.initializeApp(
-          options: bootstrapOptions,
-        );
-        print('[SecureConfig] Default Firebase app initialized: ${bootstrapOptions.projectId}');
-      } catch (e) {
-        print('[SecureConfig] Default app init error: $e');
+        await Firebase.initializeApp(options: bootstrapOptions);
+        print('[SecureConfig] Created DEFAULT app with bootstrap: ${bootstrapOptions.projectId}');
+      } catch (e2) {
+        print('[SecureConfig] DEFAULT app init error: $e2');
       }
     }
     
-    // Step 2: Enable App Check for the default app
+    // Step 2: Create NAMED "config" app for explicit config fetching
     try {
-      await _enableAppCheck();
-    } catch (e) {
-      print('[SecureConfig] App Check enable error: $e');
-    }
-    
-    // Step 3: Create NAMED "config" Firebase app for config fetching
-    // This ensures we always fetch configs from development-417611
-    try {
-      await Firebase.initializeApp(
+      final configApp = await Firebase.initializeApp(
         name: 'config',
         options: bootstrapOptions,
       );
       print('[SecureConfig] Named "config" Firebase app created for: ${bootstrapOptions.projectId}');
+      
+      // Enable App Check for the named config app
+      try {
+        await FirebaseAppCheck.instanceFor(app: configApp).activate(
+          androidProvider: AndroidProvider.playIntegrity,
+          appleProvider: AppleProvider.deviceCheck,
+        );
+        print('[SecureConfig] App Check enabled for config app');
+      } catch (e) {
+        print('[SecureConfig] App Check activation error: $e');
+        // Continue without App Check in development
+      }
     } catch (e) {
       // Config app might already exist, that's okay
-      print('[SecureConfig] Config app init: $e');
-    }
-  }
-
-  /// Enable Firebase App Check
-  static Future<void> _enableAppCheck() async {
-    try {
-      await FirebaseAppCheck.instance.activate(
-        androidProvider: AndroidProvider.playIntegrity,
-        appleProvider: AppleProvider.deviceCheck,
-      );
-      print('[SecureConfig] App Check enabled');
-    } catch (e) {
-      print('[SecureConfig] App Check activation error: $e');
-      // Continue without App Check in development
+      print('[SecureConfig] Config app init error: $e');
     }
   }
 

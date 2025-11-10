@@ -150,13 +150,15 @@ In Xcode:
 
 ## 📚 Documentation
 
-| Document                                                      | Description                                          |
-| ------------------------------------------------------------- | ---------------------------------------------------- |
-| **[FLAVORS_GUIDE.md](docs/FLAVORS_GUIDE.md)**                 | Complete guide for Android & iOS flavor setup        |
-| **[FIREBASE_CONFIG.md](docs/FIREBASE_CONFIG.md)**             | How to update and manage Firebase configs            |
-| **[DYNAMIC_CONFIGURATION.md](docs/DYNAMIC_CONFIGURATION.md)** | Dynamic app configuration via Firestore (no release) |
-| **[DOCUMENTATION.md](docs/DOCUMENTATION.md)**                 | Complete documentation index and guide               |
-| **[scripts/README.md](scripts/README.md)**                    | Firestore population scripts documentation           |
+| Document                                                                          | Description                                                      |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| **[FLAVORS_GUIDE.md](docs/FLAVORS_GUIDE.md)**                                     | Complete guide for Android & iOS flavor setup                    |
+| **[FIREBASE_CONFIG.md](docs/FIREBASE_CONFIG.md)**                                 | How to update and manage Firebase configs                        |
+| **[DYNAMIC_CONFIGURATION.md](docs/DYNAMIC_CONFIGURATION.md)**                     | Dynamic app configuration via Firestore (no release)             |
+| **[ANDROID_FIREBASE_PROJECT_SWITCH.md](docs/ANDROID_FIREBASE_PROJECT_SWITCH.md)** | Android: How to switch Firebase projects (flavor-specific files) |
+| **[GOOGLE_SIGNIN_WEB_CLIENT_ID.md](docs/GOOGLE_SIGNIN_WEB_CLIENT_ID.md)**         | Find and verify Google Sign In Web Client ID                     |
+| **[DOCUMENTATION.md](docs/DOCUMENTATION.md)**                                     | Complete documentation index and guide                           |
+| **[scripts/README.md](scripts/README.md)**                                        | Firestore population scripts documentation                       |
 
 ---
 

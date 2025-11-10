@@ -620,6 +620,8 @@ No app update needed.
 
 ## Related Documentation
 
+- **[ANDROID_FIREBASE_PROJECT_SWITCH.md](ANDROID_FIREBASE_PROJECT_SWITCH.md)** - **Android-specific: How to switch Firebase projects (explains flavor-specific google-services.json files)**
+- **[GOOGLE_SIGNIN_WEB_CLIENT_ID.md](GOOGLE_SIGNIN_WEB_CLIENT_ID.md)** - How to find and verify Google Sign In Web Client ID
 - **[FLAVORS_GUIDE.md](FLAVORS_GUIDE.md)** - Complete flavor setup for Android & iOS
 - **[FIREBASE_CONFIG.md](FIREBASE_CONFIG.md)** - Firebase projects and credentials management
 - **[scripts/README.md](../scripts/README.md)** - Firestore population scripts

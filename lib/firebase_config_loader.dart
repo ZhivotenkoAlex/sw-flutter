@@ -18,7 +18,7 @@ class FirebaseConfigLoader {
     
     // Fallback for AppConfig (shouldn't happen in production)
     throw UnsupportedError('loadFirebaseOptions requires SecureAppConfig');
-  }
+    }
 
   /// Get Firebase options for bootstrap initialization
   /// This uses the development-417611 project with skanuj-wygrywaj database
@@ -36,15 +36,15 @@ class FirebaseConfigLoader {
       );
     } else {
       // Use Android-specific API key for development-417611
-      return const FirebaseOptions(
-        apiKey: 'AIzaSyClPTttdsqmbC68z9HxQsWehxcf0Vhb50M',
-        appId: '1:159120615271:android:8e46a63c1ab6102f74f1c2',
-        messagingSenderId: '159120615271',
-        projectId: 'development-417611',
-        storageBucket: 'development-417611.firebasestorage.app',
-        databaseURL: 'https://development-417611-default-rtdb.firebaseio.com',
-      );
-    }
+    return const FirebaseOptions(
+      apiKey: 'AIzaSyClPTttdsqmbC68z9HxQsWehxcf0Vhb50M',
+      appId: '1:159120615271:android:8e46a63c1ab6102f74f1c2',
+      messagingSenderId: '159120615271',
+      projectId: 'development-417611',
+      storageBucket: 'development-417611.firebasestorage.app',
+      databaseURL: 'https://development-417611-default-rtdb.firebaseio.com',
+    );
+  }
   }
 }
 

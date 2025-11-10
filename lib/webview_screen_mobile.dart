@@ -743,7 +743,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
           Expanded(
             child: SafeArea(
               top: !kDebugMode, // If not debug, add top SafeArea
-              child: InAppWebView(
+        child: InAppWebView(
           initialUrlRequest: URLRequest(url: WebUri(initialUrl)),
           initialSettings: InAppWebViewSettings(
             javaScriptEnabled: true,

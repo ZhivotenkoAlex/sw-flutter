@@ -45,7 +45,7 @@ What you'll find:
 - ✅ Testing flavors checklist
 - ✅ Flavor-specific troubleshooting
 
-**Read this:**
+**Read this:** 
 
 - When setting up the project for the first time
 - When adding a new company/flavor
@@ -258,7 +258,7 @@ When onboarding a new developer, ensure they:
    # Check config files exist
    ls -la android/app/src/*/google-services.json
    ls -la ios/Runner/*/GoogleService-Info.plist
-
+   
    # Verify Firestore
    cd scripts && node verify_firestore_data.js
    ```
