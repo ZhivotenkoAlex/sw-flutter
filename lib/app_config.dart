@@ -3,14 +3,12 @@ class AppConfig {
   final bool isLegacy;
   final String firebaseProject;
   final DateTime fetchedAt;
-  final String? backendUrl;
 
   AppConfig({
     required this.webviewUrl,
     required this.isLegacy,
     required this.firebaseProject,
     required this.fetchedAt,
-    this.backendUrl,
   });
 
   factory AppConfig.fromJson(Map<String, dynamic> json) {
@@ -19,7 +17,6 @@ class AppConfig {
       isLegacy: json['isLegacy'] as bool,
       firebaseProject: json['firebaseProject'] as String,
       fetchedAt: DateTime.now(),
-      backendUrl: json['backendUrl'] as String?,
     );
   }
 
@@ -29,7 +26,6 @@ class AppConfig {
       'isLegacy': isLegacy,
       'firebaseProject': firebaseProject,
       'fetchedAt': fetchedAt.toIso8601String(),
-      'backendUrl': backendUrl,
     };
   }
 
@@ -39,7 +35,6 @@ class AppConfig {
       isLegacy: json['isLegacy'] as bool,
       firebaseProject: json['firebaseProject'] as String,
       fetchedAt: DateTime.parse(json['fetchedAt'] as String),
-      backendUrl: json['backendUrl'] as String?,
     );
   }
 

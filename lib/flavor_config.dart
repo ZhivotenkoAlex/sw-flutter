@@ -1,5 +1,3 @@
-import 'app_config.dart';
-
 enum FlavorType {
   galeriaKazimierz,
   galeriaKazimierzNew,
@@ -10,20 +8,12 @@ class FlavorConfig {
   final String name;
   final String packageId;
   final String companyId;
-  final bool isLegacyByDefault;
-  final String firebaseProject;
-  final String defaultWebviewUrl;
-  final String? defaultBackendUrl;
 
   FlavorConfig({
     required this.flavor,
     required this.name,
     required this.packageId,
     required this.companyId,
-    required this.isLegacyByDefault,
-    required this.firebaseProject,
-    required this.defaultWebviewUrl,
-    this.defaultBackendUrl,
   });
 
   static FlavorConfig? _instance;
@@ -89,10 +79,6 @@ class FlavorConfig {
           name: 'Galeria Kazimierz',
           packageId: 'pl.a2ti.galeriakazimierz',
           companyId: 'galeria-kazimierz',
-          isLegacyByDefault: true,
-          firebaseProject: 'galeria-kazimierz',
-          defaultWebviewUrl: 'https://login.2take.it/?company_name=galeria-kazimierz&legacy=true&d=9e30d60cdabaa8c6859b7ee737cd943b23d727b3',
-          defaultBackendUrl: 'https://europe-central2-galeria-kazimierz-827d4.cloudfunctions.net/legacy-backend',
         );
 
       case FlavorType.galeriaKazimierzNew:
@@ -101,23 +87,10 @@ class FlavorConfig {
           name: 'Galeria Kazimierz New',
           packageId: 'com.skanujwygrywaj.skanuj_wygrywaj',
           companyId: 'kazimierz-club-new',
-          isLegacyByDefault: false,
-          firebaseProject: 'development-417611',
-          defaultWebviewUrl: 'https://skanuj-staging.web.app?company_name=kazimierz-club-new',
-          defaultBackendUrl: 'https://europe-central2-development-417611.cloudfunctions.net/kanuj-wygrywaj-backend',
         );
     }
   }
 
-  AppConfig createDefaultAppConfig() {
-    return AppConfig(
-      webviewUrl: defaultWebviewUrl,
-      isLegacy: isLegacyByDefault,
-      firebaseProject: firebaseProject,
-      fetchedAt: DateTime.now(),
-      backendUrl: defaultBackendUrl,
-    );
-  }
 
   @override
   String toString() {

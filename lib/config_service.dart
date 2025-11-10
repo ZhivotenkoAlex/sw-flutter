@@ -3,18 +3,68 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'app_config.dart';
 import 'company_mapping.dart';
-import 'flavor_config.dart';
+import 'services/secure_config_service.dart';
+import 'firebase_config_loader.dart';
 
+/// ConfigService now acts as a facade over SecureConfigService
+/// Maintains backward compatibility while using secure Firestore-based config
 class ConfigService {
   static const String _baseUrl = 
       'https://europe-central2-development-417611.cloudfunctions.net/kanuj-wygrywaj-backend';
   static const String _cacheKey = 'app_config_cache';
-  static const bool _useMockResponse = true; // Set to false when API is ready
+  static const bool _useFirestoreConfig = true; // Use Firestore for secure config
 
   static AppConfig? _memoryCache;
 
   /// Get app configuration with caching and TTL
+  /// Now delegates to SecureConfigService for Firestore-based config
   static Future<AppConfig> getConfig({bool forceRefresh = false}) async {
+    if (_useFirestoreConfig) {
+      // Use new secure Firestore-based configuration
+      return await getSecureConfig(forceRefresh: forceRefresh);
+    }
+    
+    // Legacy path (kept for backward compatibility during migration)
+    return await _getLegacyConfig(forceRefresh: forceRefresh);
+  }
+
+  /// Get secure configuration from Firestore
+  static Future<SecureAppConfig> getSecureConfig({bool forceRefresh = false}) async {
+    try {
+      // Initialize bootstrap Firebase if not already done
+      await SecureConfigService.initializeBootstrapFirebase(
+        bootstrapOptions: FirebaseConfigLoader.getBootstrapOptions(),
+      );
+
+      // Get company ID from flavor or package
+      final companyId = await CompanyMapping.getCompanyId();
+      print('[ConfigService] Fetching secure config for: $companyId');
+
+      // Fetch from Firestore with caching
+      final config = await SecureConfigService.fetchConfig(
+        companyId: companyId,
+        forceRefresh: forceRefresh,
+      );
+
+      _memoryCache = config;
+      return config;
+    } catch (e) {
+      print('[ConfigService] Error fetching secure config: $e');
+      
+      // Try to get from old cache as fallback
+      final cachedConfig = await _loadFromCache();
+      if (cachedConfig != null) {
+        print('[ConfigService] Using legacy cache as fallback');
+        _memoryCache = cachedConfig;
+        return cachedConfig as SecureAppConfig;
+      }
+      
+      rethrow;
+    }
+  }
+
+  /// Legacy config fetching (kept for backward compatibility)
+  static Future<AppConfig> _getLegacyConfig({bool forceRefresh = false}) async {
     // Return memory cache if valid and not forcing refresh
     if (!forceRefresh && _memoryCache != null && !_memoryCache!.isCacheStale) {
       print('[ConfigService] Using memory cache');
@@ -61,9 +111,10 @@ class ConfigService {
     }
   }
 
-  /// Fetch configuration from API
+  /// Fetch configuration from API  
   static Future<AppConfig> _fetchFromApi() async {
-    if (_useMockResponse) {
+    const useMockResponse = true; // Set to false when API is ready
+    if (useMockResponse) {
       return _getMockResponse();
     }
 
@@ -83,42 +134,28 @@ class ConfigService {
     }
   }
 
-  /// Mock response for testing until API is ready
+  /// Mock response for testing (legacy)
   static Future<AppConfig> _getMockResponse() async {
     await Future.delayed(const Duration(milliseconds: 500)); // Simulate network
-    
-    // Use flavor config if available, otherwise fetch company ID
-    if (FlavorConfig.isInitialized) {
-      print('[ConfigService] Using flavor defaults for mock response');
-      return FlavorConfig.instance.createDefaultAppConfig();
-    }
     
     final companyId = await CompanyMapping.getCompanyId();
     
     // Mock response - defaults to legacy mode
     return AppConfig(
-      webviewUrl: 'https://login.2take.it/?company_name=$companyId&legacy=true&d=9e30d60cdabaa8c6859b7ee737cd943b23d727b3',
+      webviewUrl: 'https://login.2take.it/?company_name=$companyId',
       isLegacy: true,
       firebaseProject: 'galeria-kazimierz',
       fetchedAt: DateTime.now(),
-      backendUrl: 'https://europe-central2-galeria-kazimierz-827d4.cloudfunctions.net/legacy-backend',
     );
   }
 
-  /// Get default config as ultimate fallback
+  /// Get default config as ultimate fallback (legacy)
   static AppConfig _getDefaultConfig() {
-    // Use flavor config if available
-    if (FlavorConfig.isInitialized) {
-      print('[ConfigService] Using flavor defaults for fallback');
-      return FlavorConfig.instance.createDefaultAppConfig();
-    }
-    
     return AppConfig(
       webviewUrl: 'https://login.2take.it/?company_name=galeria-kazimierz&legacy=true&d=9e30d60cdabaa8c6859b7ee737cd943b23d727b3',
       isLegacy: true,
       firebaseProject: 'galeria-kazimierz',
       fetchedAt: DateTime.now(),
-      backendUrl: null,
     );
   }
 

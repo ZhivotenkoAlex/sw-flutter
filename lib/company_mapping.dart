@@ -57,13 +57,12 @@ class CompanyMapping {
   /// 
   /// Mapping rules (aligned with flavors):
   /// - pl.a2ti.galeriakazimierz -> galeria-kazimierz
-  /// - pl.a2ti.kazimierzclub -> kazimierz-club
-  /// - com.skanujwygrywaj.galeriakazimiernew -> galeria-kazimierz-new
+  /// - com.skanujwygrywaj.skanuj_wygrywaj -> kazimierz-club-new
   static String _extractCompanyIdFromPackage(String packageName) {
     // Known package mappings (should match flavor configs)
     const Map<String, String> packageMappings = {
       'pl.a2ti.galeriakazimierz': 'galeria-kazimierz',
-      'com.skanujwygrywaj.galeriakazimiernew': 'galeria-kazimierz-new',
+      'com.skanujwygrywaj.skanuj_wygrywaj': 'kazimierz-club-new',
       // Add more mappings as needed
     };
 

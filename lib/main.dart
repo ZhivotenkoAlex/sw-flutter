@@ -5,7 +5,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'webview_screen.dart';
 import 'firebase_messaging_service.dart';
 import 'config_service.dart';
-import 'app_config.dart';
+import 'services/secure_config_service.dart';
+import 'firebase_config_loader.dart';
 import 'flavor_config.dart';
 
 @pragma('vm:entry-point')
@@ -34,46 +35,66 @@ void main() async {
   await FlavorConfig.autoDetect();
   print('[Main] Flavor: ${FlavorConfig.instance.name}');
   
-  // 1. Fetch app configuration (with cache/mock, or use flavor defaults)
-  print('[Main] Fetching app configuration...');
-  final config = await ConfigService.getConfig(forceRefresh: kDebugMode);
-  print('[Main] Config loaded: isLegacy=${config.isLegacy}, firebase=${config.firebaseProject}');
+  SecureAppConfig? config;
+  
+  // 1. Fetch secure configuration from Firestore
+  if (!kIsWeb) {
+    try {
+      print('[Main] Fetching secure configuration from Firestore...');
+      config = await ConfigService.getSecureConfig(forceRefresh: kDebugMode);
+      print('[Main] Secure config loaded: isLegacy=${config.isLegacy}, firebase=${config.firebaseProject}');
+    } catch (e) {
+      print('[Main] Failed to fetch secure config: $e');
+      print('[Main] App will continue with limited functionality');
+    }
+  }
   
   // 2. Initialize Firebase on mobile platforms with correct project
-  if (!kIsWeb) {
+  if (!kIsWeb && config != null) {
     // Register background handler early for iOS/macOS/Android background messages
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     
     try {
-      await FirebaseMessagingService.initialize(config: config);
+      // Firebase is already initialized with bootstrap config
+      // We'll use that for the app since it's already connected to development-417611
+      print('[Main] Using bootstrap Firebase app (already initialized)');
+      print('[Main] Firebase project: ${config.firebaseProject}');
       
-      // Configure API based on config
-      final backendUrl = config.backendUrl ?? 
-        (config.isLegacy 
-          ? 'https://europe-central2-galeria-kazimierz-827d4.cloudfunctions.net/legacy-backend'
-          : 'https://europe-central2-development-417611.cloudfunctions.net/kanuj-wygrywaj-backend');
+      // Initialize Firebase Messaging
+      await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
       
+      // Configure API with hardcoded backend URL (same for all flavors)
       FirebaseMessagingService.configureApi(
-        baseUrl: backendUrl,
+        baseUrl: 'https://europe-central2-development-417611.cloudfunctions.net/kanuj-wygrywaj-backend',
         registerPath: '/notifications/register-token',
       );
       
-      print('[Main] Firebase initialized with project: ${config.firebaseProject}');
+      print('[Main] Firebase Messaging configured');
     } catch (e) {
-      print('[Main] Firebase initialization failed, continuing without it: $e');
+      print('[Main] Firebase configuration failed, continuing without it: $e');
     }
-  } else {
+  } else if (kIsWeb) {
     print('[Main] Running on web, skipping Firebase initialization');
   }
   
-  // 3. Run app with config
-  runApp(MyApp(config: config));
+  // 3. Run app with config (use a fallback if config failed to load)
+  if (config != null) {
+    runApp(MyApp(config: config));
+  } else {
+    // Fallback for web or if config fetch failed
+    print('[Main] Running with fallback configuration');
+    runApp(const MyApp(config: null));
+  }
 }
 
 class MyApp extends StatelessWidget {
-  final AppConfig config;
+  final SecureAppConfig? config;
   
-  const MyApp({super.key, required this.config});
+  const MyApp({super.key, this.config});
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +104,20 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: WebViewScreen(config: config),
+      home: config != null 
+        ? WebViewScreen(config: config!)
+        : const Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Loading configuration...'),
+                ],
+              ),
+            ),
+          ),
     );
   }
 }
