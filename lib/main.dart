@@ -17,6 +17,9 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     await Firebase.initializeApp();
   } catch (_) {}
   try {
+    final messageId = message.messageId ?? 'null';
+    final sentTime = message.sentTime?.toString() ?? 'null';
+    final from = message.from ?? 'null';
     final title = message.notification?.title ?? '';
     final body = message.notification?.body ?? '';
     // Keep logs minimal but useful for debugging background delivery
@@ -24,7 +27,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     // iOS background "data" pushes require content-available=1 from server
     // to reach this handler when the app is not in foreground
     // ignore: avoid_print
-    print('[FCM][bg] title="$title" body="$body" data=${message.data}');
+    print('[FCM][bg] messageId="$messageId" from="$from" sentTime="$sentTime" title="$title" body="$body" data=${message.data}');
   } catch (_) {}
 }
 
@@ -59,6 +62,9 @@ void main() async {
       // We'll use that for the app since it's already connected to development-417611
       print('[Main] Using bootstrap Firebase app (already initialized)');
       print('[Main] Firebase project: ${config.firebaseProject}');
+      
+      // Initialize Firebase Messaging Service
+      await FirebaseMessagingService.initialize(config: config);
       
       // Initialize Firebase Messaging
       await FirebaseMessaging.instance.requestPermission(

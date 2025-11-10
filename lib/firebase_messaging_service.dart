@@ -25,15 +25,22 @@ class FirebaseMessagingService {
     try {
       print('[FCM] initialize() start');
       
-      // Initialize Firebase with correct options based on config
-      if (config != null) {
-        final firebaseOptions = await FirebaseConfigLoader.loadFirebaseOptions(config);
-        await Firebase.initializeApp(options: firebaseOptions);
-      } else {
-        await Firebase.initializeApp();
+      // Check if Firebase is already initialized
+      try {
+        final existingApp = Firebase.app();
+        print('[FCM] Firebase already initialized, using existing app: ${existingApp.name}');
+        try { print('[FCM] projectId=' + (existingApp.options.projectId ?? '-')); } catch (_) {}
+      } catch (e) {
+        // Firebase not initialized, initialize it now
+        print('[FCM] Firebase not initialized, initializing now...');
+        if (config != null) {
+          final firebaseOptions = await FirebaseConfigLoader.loadFirebaseOptions(config);
+          await Firebase.initializeApp(options: firebaseOptions);
+        } else {
+          await Firebase.initializeApp();
+        }
+        try { print('[FCM] projectId=' + (Firebase.app().options.projectId ?? '-')); } catch (_) {}
       }
-      
-      try { print('[FCM] projectId=' + (Firebase.app().options.projectId ?? '-')); } catch (_) {}
       await FirebaseMessaging.instance.setAutoInitEnabled(true);
       // Proactively ensure permission at startup, but only if not decided yet
       await _ensurePermissionIfNeeded();
@@ -52,16 +59,22 @@ class FirebaseMessagingService {
 
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         try {
+          final messageId = message.messageId ?? 'null';
           final title = message.notification?.title ?? '';
           final body = message.notification?.body ?? '';
-          print('[FCM] onMessage title="' + title + '" body="' + body + '" data=' + message.data.toString());
+          final sentTime = message.sentTime?.toString() ?? 'null';
+          final from = message.from ?? 'null';
+          print('[FCM] onMessage messageId="' + messageId + '" from="' + from + '" sentTime="' + sentTime + '" title="' + title + '" body="' + body + '" data=' + message.data.toString());
         } catch (_) {}
       });
 
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
         try {
+          final messageId = message.messageId ?? 'null';
+          final sentTime = message.sentTime?.toString() ?? 'null';
+          final from = message.from ?? 'null';
           final click = message.data['click_action'] ?? message.notification?.android?.clickAction ?? '';
-          print('[FCM] onMessageOpenedApp click="' + click + '" data=' + message.data.toString());
+          print('[FCM] onMessageOpenedApp messageId="' + messageId + '" from="' + from + '" sentTime="' + sentTime + '" click="' + click + '" data=' + message.data.toString());
         } catch (_) {}
       });
 
@@ -83,13 +96,27 @@ class FirebaseMessagingService {
     // Ensure permission only if not granted
     await _ensurePermissionIfNeeded();
     var t = _fcmToken ?? await FirebaseMessaging.instance.getToken();
-    if (t != null && t.isNotEmpty) { _fcmToken = t; print('[FCM] _awaitFcmToken() immediate token'); return t; }
-    try { t = await FirebaseMessaging.instance.onTokenRefresh.first.timeout(timeout); print('[FCM] _awaitFcmToken() from onTokenRefresh'); } catch (e) { print('[FCM] _awaitFcmToken() refresh timeout/error: ' + e.toString()); }
+    if (t != null && t.isNotEmpty) { 
+      _fcmToken = t; 
+      print('[FCM] _awaitFcmToken() immediate token=' + t);
+      return t; 
+    }
+    try { 
+      t = await FirebaseMessaging.instance.onTokenRefresh.first.timeout(timeout); 
+      print('[FCM] _awaitFcmToken() from onTokenRefresh token=' + (t ?? 'null')); 
+    } catch (e) { 
+      print('[FCM] _awaitFcmToken() refresh timeout/error: ' + e.toString()); 
+    }
     if (t == null || t.isEmpty) {
-      try { t = await FirebaseMessaging.instance.getToken(); print('[FCM] getToken after permission'); } catch (e) { print('[FCM] getToken error: ' + e.toString()); }
+      try { 
+        t = await FirebaseMessaging.instance.getToken(); 
+        print('[FCM] getToken after permission token=' + (t ?? 'null')); 
+      } catch (e) { 
+        print('[FCM] getToken error: ' + e.toString()); 
+      }
     }
     if (t != null && t.isNotEmpty) _fcmToken = t;
-    print('[FCM] _awaitFcmToken() result=' + (t ?? 'null'));
+    print('[FCM] _awaitFcmToken() result=' + (t ?? 'null') + ' tokenLen=' + (t?.length.toString() ?? '0'));
     return t;
   }
 
