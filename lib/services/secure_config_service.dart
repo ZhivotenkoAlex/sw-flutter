@@ -30,20 +30,10 @@ class SecureAppConfig extends AppConfig {
 
   factory SecureAppConfig.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    
-    print('[SecureConfig] Parsing Firestore document...');
-    print('[SecureConfig] Available keys: ${data.keys.toList()}');
 
     final companyId = data['companyId'] as String;
-    print('[SecureConfig] Loaded companyId: $companyId');
-
     final googleAuthCompanyId = data['googleAuthCompanyId'] as String?;
-    if (googleAuthCompanyId != null) {
-      print('[SecureConfig] Loaded googleAuthCompanyId: $googleAuthCompanyId');
-    }
-
     final backendUrl = data['backendUrl'] as String;
-    print('[SecureConfig] Loaded backendUrl: $backendUrl');
 
     return SecureAppConfig(
       webviewUrl: data['webviewUrl'] as String,
@@ -130,13 +120,11 @@ class SecureConfigService {
   }) async {
     // Step 1: Ensure DEFAULT app exists (required by Firestore plugin internals)
     try {
-      final defaultApp = Firebase.app();
-      print('[SecureConfig] DEFAULT app already exists: ${defaultApp.options.projectId}');
+      Firebase.app();
     } catch (e) {
       // DEFAULT app doesn't exist, create it with bootstrap options
       try {
         await Firebase.initializeApp(options: bootstrapOptions);
-        print('[SecureConfig] Created DEFAULT app with bootstrap: ${bootstrapOptions.projectId}');
       } catch (e2) {
         print('[SecureConfig] DEFAULT app init error: $e2');
       }
@@ -148,7 +136,6 @@ class SecureConfigService {
         name: 'config',
         options: bootstrapOptions,
       );
-      print('[SecureConfig] Named "config" Firebase app created for: ${bootstrapOptions.projectId}');
       
       // Enable App Check for the named config app
       try {
@@ -156,14 +143,11 @@ class SecureConfigService {
           androidProvider: AndroidProvider.playIntegrity,
           appleProvider: AppleProvider.deviceCheck,
         );
-        print('[SecureConfig] App Check enabled for config app');
       } catch (e) {
-        print('[SecureConfig] App Check activation error: $e');
         // Continue without App Check in development
       }
     } catch (e) {
       // Config app might already exist, that's okay
-      print('[SecureConfig] Config app init error: $e');
     }
   }
 
@@ -172,32 +156,51 @@ class SecureConfigService {
     required String companyId,
     bool forceRefresh = false,
   }) async {
-    // Return memory cache if valid
+    // Return memory cache if valid (only within same app session)
     if (!forceRefresh && _memoryCache != null) {
-      print('[SecureConfig] Using memory cache');
       return _memoryCache!;
     }
 
-    // Try persistent cache first
+    // Try persistent cache first, but check version in Firestore
     if (!forceRefresh) {
       final cachedConfig = await _loadFromCache();
       if (cachedConfig != null && !_isCacheExpired(cachedConfig)) {
-        print('[SecureConfig] Using persistent cache');
-        _memoryCache = cachedConfig;
-        return cachedConfig;
+        // Check if newer version is available in Firestore
+        try {
+          final remoteVersion = await _getRemoteVersion(companyId);
+          if (remoteVersion != null && remoteVersion > cachedConfig.version) {
+            // Clear old cache before fetching new config
+            await clearCache();
+            // Version is newer, fetch fresh config
+            forceRefresh = true;
+          } else if (remoteVersion != null && remoteVersion < cachedConfig.version) {
+            // Remote version is older than cached (shouldn't happen, but clear cache to be safe)
+            print('[SecureConfig] Warning: Remote version ($remoteVersion) is older than cached (${cachedConfig.version}), clearing cache');
+            await clearCache();
+            forceRefresh = true;
+          } else {
+            _memoryCache = cachedConfig;
+            return cachedConfig;
+          }
+        } catch (e) {
+          // If version check fails, use cached config
+          _memoryCache = cachedConfig;
+          return cachedConfig;
+        }
+      } else if (cachedConfig != null && _isCacheExpired(cachedConfig)) {
+        // Cache expired, clear it
+        await clearCache();
       }
     }
 
     // Fetch from Firestore
     try {
-      print('[SecureConfig] Fetching config from Firestore for: $companyId');
       final config = await _fetchFromFirestore(companyId);
       
       // Save to cache
       await _saveToCache(config);
       _memoryCache = config;
       
-      print('[SecureConfig] Config fetched successfully');
       return config;
     } catch (e) {
       print('[SecureConfig] Error fetching from Firestore: $e');
@@ -205,7 +208,6 @@ class SecureConfigService {
       // Fallback to stale cache if available
       final cachedConfig = await _loadFromCache();
       if (cachedConfig != null) {
-        print('[SecureConfig] Using stale cache as fallback');
         _memoryCache = cachedConfig;
         return cachedConfig;
       }
@@ -215,22 +217,41 @@ class SecureConfigService {
     }
   }
 
+  /// Get version number from Firestore without fetching full document
+  static Future<int?> _getRemoteVersion(String companyId) async {
+    try {
+      final configApp = Firebase.app('config');
+      final firestore = FirebaseFirestore.instanceFor(
+        app: configApp,
+        databaseId: 'skanuj-wygrywaj',
+      );
+      
+      final docRef = firestore.collection('mobile_configs').doc(companyId);
+      final docSnapshot = await docRef.get(const GetOptions(source: Source.server));
+      
+      if (!docSnapshot.exists) {
+        return null;
+      }
+      
+      final data = docSnapshot.data() as Map<String, dynamic>;
+      return data['version'] as int?;
+    } catch (e) {
+      return null;
+    }
+  }
+
   /// Fetch configuration from Firestore
   /// Uses the NAMED "config" Firebase app to ensure we always fetch from development-417611
   static Future<SecureAppConfig> _fetchFromFirestore(String companyId) async {
     try {
-      print('[SecureConfig] Getting named "config" Firebase app...');
       final configApp = Firebase.app('config'); // Use named config app for development-417611
-      print('[SecureConfig] Config app project: ${configApp.options.projectId}');
       
-      print('[SecureConfig] Connecting to Firestore database: skanuj-wygrywaj...');
       // Connect to the specific named database in development-417611 project
       final firestore = FirebaseFirestore.instanceFor(
         app: configApp,
         databaseId: 'skanuj-wygrywaj',
       );
       
-      print('[SecureConfig] Fetching document: mobile_configs/$companyId');
       final docRef = firestore.collection('mobile_configs').doc(companyId);
       final docSnapshot = await docRef.get();
 
@@ -238,11 +259,9 @@ class SecureConfigService {
         throw Exception('Config document not found for company: $companyId');
       }
 
-      print('[SecureConfig] Document found, parsing...');
       return SecureAppConfig.fromFirestore(docSnapshot);
     } catch (e) {
       print('[SecureConfig] Firestore fetch error: $e');
-      print('[SecureConfig] Stack trace: ${StackTrace.current}');
       rethrow;
     }
   }
@@ -258,7 +277,6 @@ class SecureConfigService {
       final json = jsonDecode(cachedJson) as Map<String, dynamic>;
       return SecureAppConfig.fromCachedJson(json);
     } catch (e) {
-      print('[SecureConfig] Cache load error: $e');
       return null;
     }
   }
@@ -270,7 +288,6 @@ class SecureConfigService {
       final json = jsonEncode(config.toJson());
       await prefs.setString(_cacheKey, json);
       await prefs.setInt(_cacheVersionKey, config.version);
-      print('[SecureConfig] Config cached');
     } catch (e) {
       print('[SecureConfig] Cache save error: $e');
     }
@@ -288,7 +305,6 @@ class SecureConfigService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_cacheKey);
     await prefs.remove(_cacheVersionKey);
-    print('[SecureConfig] Cache cleared');
   }
 
   /// Check if a newer version is available in cache

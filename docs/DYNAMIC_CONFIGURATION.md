@@ -58,7 +58,7 @@ Load WebView with configured URL
 | **firebaseConfigAndroid** | Firebase credentials for Android | ❌ No |
 | **firebaseConfigIOS** | Firebase credentials for iOS | ❌ No |
 | **firebaseProject** | Firebase project name (metadata) | ❌ No |
-| **version** | Config version number | ❌ No |
+| **version** | Config version number (⚠️ MUST increment when updating) | ❌ No |
 
 ---
 
@@ -112,7 +112,8 @@ Firebase Project: development-417611
     "iosBundleId": "it.2take.galeriakazimierz"
   },
   
-  // Config version (increment when making changes)
+  // Config version (REQUIRED: increment when making ANY changes)
+  // The app automatically checks version and fetches new config if version is higher
   "version": 1
 }
 ```
@@ -152,16 +153,22 @@ Firebase Project: development-417611
    companyId: "kazimierz-club-new"  // Change from "galeria-kazimierz"
    ```
 
-3. **Increment version** (recommended but optional):
+3. **⚠️ CRITICAL: Increment version** (REQUIRED):
    ```javascript
-   version: 2  // Was 1
+   version: 2  // Was 1 - MUST be incremented!
    ```
+   
+   **Why version is required:**
+   - The app caches configuration locally for performance
+   - When version is incremented, the app automatically detects the change
+   - App fetches new config on next launch WITHOUT requiring cache clear or reinstall
+   - Without version increment, users may see stale config until cache expires (1 hour)
 
 4. **Save changes**
 
-5. **Restart app on device** - Changes will be loaded
+5. **Restart app on device** - Changes will be loaded automatically
 
-**Result:** App loads new configuration on next launch!
+**Result:** App loads new configuration on next launch! No cache clearing needed.
 
 ---
 
@@ -180,13 +187,18 @@ Firebase Project: development-417611
    const configs = {
      'galeria-kazimierz': {
        firebaseConfig: {
-         android: { /* updated credentials */ },
+         android: { 
+           // ⚠️ CRITICAL: projectId MUST match google-services.json!
+           // For galeriaKazimierz flavor: "galeria-kazimierz-827d4"
+           projectId: 'galeria-kazimierz-827d4',
+           // ... other fields from google-services.json
+         },
          ios: { /* updated credentials */ }
        },
        webviewUrl: 'https://new-url.com',
        isLegacy: false,
-       firebaseProject: 'new-project',
-       version: 2  // Increment!
+       firebaseProject: 'galeria-kazimierz-827d4',  // Must match android projectId
+       version: 2  // ⚠️ REQUIRED: Always increment when making changes!
      }
    };
    ```
@@ -377,14 +389,41 @@ Test BOTH configurations before deploying to production:
 # ✅ Data from new database appears
 ```
 
-### Configuration Cache
+### Configuration Cache & Version System
 
-**Important:** Configuration is cached for **1 hour** in production mode.
+**How caching works:**
 
-**To force refresh:**
+The app uses a **version-based caching system**:
+
+1. **On app launch:**
+   - App checks cached config version
+   - Fetches current version from Firestore
+   - If Firestore version > cached version → **automatically fetches new config**
+   - If versions match → uses cached config (faster)
+
+2. **Cache expiration:**
+   - Cache expires after **1 hour** (if version check fails)
+   - Debug mode always fetches fresh config
+
+**⚠️ CRITICAL: Always increment version when making changes**
+
+```javascript
+// Before change:
+"version": 1
+
+// After change:
+"version": 2  // MUST increment!
+```
+
+**Why version is required:**
+- Without version increment, users may see stale config for up to 1 hour
+- With version increment, users get new config immediately on next app launch
+- No need to clear cache or reinstall app
+
+**To force refresh (if version not incremented):**
 - Run in debug mode (always refreshes)
 - OR clear app data on device
-- OR wait 1 hour
+- OR wait 1 hour (cache expires)
 
 ---
 
@@ -453,10 +492,11 @@ flutter build appbundle --flavor galeriaKazimierz \
   "companyId": "kazimierz-club-new",
   "webviewUrl": "https://new-backend.com",
   "isLegacy": false,
-  "version": 2
+  "version": 2  // ⚠️ CRITICAL: Incremented from 1
 }
 
 // All users get new configuration on next app launch!
+// Version increment triggers automatic refresh - no cache clearing needed
 ```
 
 **If issues occur: Instant rollback**
@@ -466,10 +506,11 @@ flutter build appbundle --flavor galeriaKazimierz \
   "companyId": "galeria-kazimierz",  // Reverted
   "webviewUrl": "https://old-backend.com",  // Reverted
   "isLegacy": true,  // Reverted
-  "version": 3
+  "version": 3  // ⚠️ CRITICAL: Incremented from 2
 }
 
 // All users back to old configuration on next launch
+// Version increment ensures immediate rollback without cache clearing
 ```
 
 ---
@@ -510,9 +551,20 @@ flutter logs | grep "SecureConfig\|Firestore"
 
 **Symptom:** Made changes in Firestore but app still shows old configuration
 
-**Cause:** Configuration cache (1 hour in production)
+**Cause:** Version not incremented OR configuration cache
 
 **Solution:**
+
+**✅ RECOMMENDED: Increment version (automatic refresh)**
+```javascript
+// In Firestore, increment version:
+"version": 2  // Was 1 - MUST increment!
+```
+- App automatically detects version change
+- Fetches new config on next launch
+- No cache clearing needed
+
+**Alternative solutions (if version already incremented):**
 ```bash
 # Option 1: Run in debug mode (bypasses cache)
 ./run_flavor.sh galeriaKazimierz android debug
@@ -522,9 +574,17 @@ flutter logs | grep "SecureConfig\|Firestore"
 # iOS: Delete and reinstall app
 
 # Option 3: Wait 1 hour (cache expires)
+```
 
-# Option 4: Increment version number in Firestore
-"version": 2  // Was 1
+**Verify version check:**
+```bash
+# Check logs for version comparison:
+adb logcat | grep "SecureConfig.*version"
+
+# Expected output:
+# [SecureConfig] Newer version available (2 > 1), clearing cache and fetching...
+# OR
+# [SecureConfig] Using persistent cache (version 1 is current)
 ```
 
 ---
@@ -533,16 +593,27 @@ flutter logs | grep "SecureConfig\|Firestore"
 
 **Symptom:** Push notifications stop working after changing Firebase credentials
 
-**Cause:** Mismatch between `google-services.json`/`GoogleService-Info.plist` in app and Firestore credentials
+**Cause:** Mismatch between `google-services.json`/`GoogleService-Info.plist` in app and Firestore `firebaseConfigAndroid`/`firebaseConfigIOS`
 
-**Solution:**
+**⚠️ CRITICAL: firebaseConfigAndroid MUST match native google-services.json**
 
-**For messaging to work with dynamic Firebase config:**
+**Important rules:**
+
+1. **For `galeriaKazimierz` flavor:**
+   - Native `google-services.json` uses: `galeria-kazimierz-827d4`
+   - Firestore `firebaseConfigAndroid` MUST also use: `galeria-kazimierz-827d4`
+   - **DO NOT** set `firebaseConfigAndroid.projectId` to `development-417611` for this flavor
+
+2. **For `galeriaKazimierzNew` flavor:**
+   - Native `google-services.json` uses: `development-417611`
+   - Firestore `firebaseConfigAndroid` MUST also use: `development-417611`
+
+**How the app works:**
 - The app uses TWO Firebase instances:
   - **DEFAULT** (from google-services.json/plist) - for Messaging
   - **"config"** (from Firestore) - for config fetching only
-
-**Important:** Don't change `firebaseConfig*` fields unless you know the messaging credentials are compatible.
+- **Messaging uses DEFAULT app** (from native config files)
+- **Config fetching uses "config" app** (from Firestore)
 
 **Safe changes:**
 ```javascript
@@ -550,9 +621,28 @@ flutter logs | grep "SecureConfig\|Firestore"
   "companyId": "...",     // ✅ Safe to change
   "webviewUrl": "...",    // ✅ Safe to change
   "isLegacy": true/false, // ✅ Safe to change
-  "firebaseConfig*": {}   // ⚠️  Only change if necessary
+  "version": 2,          // ✅ Safe to change (REQUIRED when updating)
+  "firebaseConfigAndroid": {
+    "projectId": "galeria-kazimierz-827d4"  // ⚠️  MUST match google-services.json!
+  }
 }
 ```
+
+**If you need to fix firebaseConfigAndroid:**
+```bash
+# Use the fix script:
+node scripts/fix_galeria_kazimierz_firebase_config.js
+
+# Or manually update in Firestore to match google-services.json
+```
+
+**Android 13+ (API 33+) Notification Permission:**
+
+On Android 13+, notification permission is automatically requested on app launch. If permission dialog doesn't appear:
+
+1. Check logs: `adb logcat | grep FCM`
+2. Verify `POST_NOTIFICATIONS` permission in AndroidManifest.xml (already included)
+3. Ensure app targets API 33+ (check `targetSdk` in build.gradle.kts)
 
 ---
 
@@ -585,13 +675,15 @@ node scripts/verify_firestore_data.js
 
 ### What You Can Do
 
-| Action | Time Required | Release Needed? |
-|--------|---------------|-----------------|
-| Change WebView URL | ~1 min | ❌ No |
-| Switch UI theme | ~1 min | ❌ No |
-| Change company/database | ~5 min | ❌ No |
-| Update Firebase credentials | ~10 min | ❌ No |
-| Rollback any change | ~1 min | ❌ No |
+| Action | Time Required | Release Needed? | Version Increment |
+|--------|---------------|-----------------|------------------|
+| Change WebView URL | ~1 min | ❌ No | ✅ Required |
+| Switch UI theme | ~1 min | ❌ No | ✅ Required |
+| Change company/database | ~5 min | ❌ No | ✅ Required |
+| Update Firebase credentials | ~10 min | ❌ No | ✅ Required |
+| Rollback any change | ~1 min | ❌ No | ✅ Required |
+
+**⚠️ Note:** Always increment `version` field when making changes. This ensures users get updates immediately on next app launch without requiring cache clearing or reinstall.
 
 ### Quick Reference
 
@@ -600,7 +692,9 @@ node scripts/verify_firestore_data.js
 Firebase Console → development-417611 
 → Firestore → skanuj-wygrywaj 
 → mobile_configs → [document] 
-→ Edit fields → Save
+→ Edit fields 
+→ ⚠️ Increment version (REQUIRED!)
+→ Save
 ```
 
 **Test changes:**
@@ -611,9 +705,17 @@ flutter logs | grep "SecureConfig"
 
 **Deploy to users:**
 ```
-Just save in Firestore!
-Users get changes on next app launch.
-No app update needed.
+1. Update Firestore config
+2. ⚠️ Increment version field
+3. Save
+Users get changes on next app launch (automatic refresh).
+No app update or cache clearing needed.
+```
+
+**Verify version check:**
+```bash
+adb logcat | grep "SecureConfig.*version"
+# Should see: "Newer version available (X > Y), clearing cache and fetching..."
 ```
 
 ---
@@ -624,7 +726,32 @@ No app update needed.
 - **[GOOGLE_SIGNIN_WEB_CLIENT_ID.md](GOOGLE_SIGNIN_WEB_CLIENT_ID.md)** - How to find and verify Google Sign In Web Client ID
 - **[FLAVORS_GUIDE.md](FLAVORS_GUIDE.md)** - Complete flavor setup for Android & iOS
 - **[FIREBASE_CONFIG.md](FIREBASE_CONFIG.md)** - Firebase projects and credentials management
+- **[FCM_TOKEN_TESTING.md](FCM_TOKEN_TESTING.md)** - How to access FCM token in production builds
 - **[scripts/README.md](../scripts/README.md)** - Firestore population scripts
+
+## Important Notes
+
+### Version Management
+
+**⚠️ ALWAYS increment version when updating Firestore config:**
+
+- Version increment triggers automatic config refresh
+- Users get new config on next app launch (no cache clearing needed)
+- Without version increment, changes may take up to 1 hour to appear
+
+### firebaseConfigAndroid Requirements
+
+**⚠️ CRITICAL: firebaseConfigAndroid.projectId MUST match native google-services.json**
+
+- `galeriaKazimierz` flavor → `galeria-kazimierz-827d4`
+- `galeriaKazimierzNew` flavor → `development-417611`
+- Mismatch causes `DEVELOPER_ERROR` and FCM messages won't arrive
+
+### Android Notification Permission
+
+- On Android 13+ (API 33+), permission is automatically requested on app launch
+- Permission dialog appears automatically in release builds
+- If permission is denied, FCM messages won't arrive
 
 ---
 

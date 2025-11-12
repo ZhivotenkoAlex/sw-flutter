@@ -50,24 +50,27 @@ This app uses a **Dual Firebase App** system:
 
 ### **galeria-kazimierz-827d4** (Legacy Project)
 
-|                          |                                   |
-| ------------------------ | --------------------------------- |
-| **Used by**              | galeriaKazimierz flavor           |
-| **Purpose**              | Firebase Messaging for legacy app |
-| **Package ID (Android)** | `pl.a2ti.galeriakazimierz`        |
-| **Bundle ID (iOS)**      | `it.2take.galeriakazimierz`       |
-| **Sender ID**            | `839029981684`                    |
+|                          |                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------------------------ |
+| **Used by**              | galeriaKazimierz flavor (legacy)                                                                       |
+| **Purpose**              | Firebase Messaging for `galeriaKazimierz` flavor                                                       |
+| **Package ID (Android)** | `pl.a2ti.galeriakazimierz`                                                                             |
+| **Bundle ID (iOS)**      | `it.2take.galeriakazimierz`                                                                            |
+| **Sender ID**            | `839029981684`                                                                                         |
+| **Status**               | ✅ **Active** - Used for FCM messages on `galeriaKazimierz` flavor                                     |
+| **Note**                 | ⚠️ **CRITICAL**: Firestore `firebaseConfigAndroid` MUST match this project (`galeria-kazimierz-827d4`) |
 
 ### **development-417611** (New Project)
 
-|                          |                                                  |
-| ------------------------ | ------------------------------------------------ |
-| **Used by**              | galeriaKazimierzNew flavor + ALL config fetching |
-| **Purpose**              | Firebase Messaging + Firestore configs           |
-| **Database**             | `skanuj-wygrywaj` (named database)               |
-| **Package ID (Android)** | `com.skanujwygrywaj.skanuj_wygrywaj`             |
-| **Bundle ID (iOS)**      | `com.skanujwygrywaj.skanujWygrywaj`              |
-| **Sender ID**            | `159120615271`                                   |
+|                          |                                                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| **Used by**              | galeriaKazimierzNew flavor + ALL config fetching + FCM messages for `galeriaKazimierzNew`                     |
+| **Purpose**              | Firebase Messaging (for new flavor) + Firestore configs (for all flavors)                                     |
+| **Database**             | `skanuj-wygrywaj` (named database)                                                                            |
+| **Package ID (Android)** | `com.skanujwygrywaj.skanuj_wygrywaj`                                                                          |
+| **Bundle ID (iOS)**      | `com.skanujwygrywaj.skanujWygrywaj`                                                                           |
+| **Sender ID**            | `159120615271`                                                                                                |
+| **Note**                 | Used for FCM messages on `galeriaKazimierzNew` flavor only. `galeriaKazimierz` uses `galeria-kazimierz-827d4` |
 
 ---
 
@@ -656,7 +659,7 @@ Google Sign-In uses a **static mapping** approach:
 
 - ✅ **Company-based mapping**: Each `companyId` maps to a specific Firebase project's Web Client ID
 - ✅ **Hardcoded in Dart**: Mapping is defined in `lib/webview_screen_mobile.dart`
-- ✅ **Priority system**: 
+- ✅ **Priority system**:
   1. `googleAuthCompanyId` from Firestore config (if explicitly set)
   2. Flavor-based fallback (e.g., `galeriaKazimierz` → `galeria-kazimierz`)
   3. `companyId` from Firestore config

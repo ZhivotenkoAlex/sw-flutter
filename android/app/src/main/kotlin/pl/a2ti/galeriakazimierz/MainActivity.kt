@@ -8,6 +8,11 @@ import io.flutter.embedding.android.FlutterActivity
 class MainActivity: FlutterActivity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Log package name for debugging
+        android.util.Log.d("MainActivity", "Package name: ${packageName}")
+        android.util.Log.d("MainActivity", "Application ID: ${applicationContext.packageName}")
+        
         createNotificationChannel()
     }
     
@@ -26,6 +31,9 @@ class MainActivity: FlutterActivity() {
             
             val notificationManager = getSystemService(NotificationManager::class.java)
             notificationManager?.createNotificationChannel(channel)
+            android.util.Log.d("MainActivity", "Notification channel '$channelId' created with importance $importance")
+        } else {
+            android.util.Log.d("MainActivity", "Notification channels not supported (API < 26)")
         }
     }
 }

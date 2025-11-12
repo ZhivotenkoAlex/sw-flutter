@@ -43,19 +43,15 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     if (savedOptions != null) {
       try {
         await Firebase.initializeApp(options: savedOptions);
-        print('[FCM][bg] Initialized default app with saved options (project: ${savedOptions.projectId})');
       } catch (e) {
         // Default app might already exist, that's okay
-        print('[FCM][bg] Default app already exists or error: $e');
       }
     } else {
       // Fallback to bootstrap options if no saved options
       try {
         await Firebase.initializeApp(options: FirebaseConfigLoader.getBootstrapOptions());
-        print('[FCM][bg] Initialized default app with bootstrap options');
       } catch (e) {
         // Default app might already exist, that's okay
-        print('[FCM][bg] Default app init error: $e');
       }
     }
   } catch (e) {
@@ -63,17 +59,15 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   }
   
   try {
-    final messageId = message.messageId ?? 'null';
-    final sentTime = message.sentTime?.toString() ?? 'null';
-    final from = message.from ?? 'null';
     final title = message.notification?.title ?? '';
     final body = message.notification?.body ?? '';
+    final from = message.from ?? 'null';
     // Keep logs minimal but useful for debugging background delivery
     // Do not add heavy work here; offload to the app after resume/open
     // iOS background "data" pushes require content-available=1 from server
     // to reach this handler when the app is not in foreground
     // ignore: avoid_print
-    print('[FCM][bg] messageId="$messageId" from="$from" sentTime="$sentTime" title="$title" body="$body" data=${message.data}');
+    print('[FCM][bg] ✅ Background message: "$title" / "$body" (from: $from)');
   } catch (_) {}
 }
 
@@ -82,19 +76,15 @@ void main() async {
   
   // 0. Initialize flavor configuration
   await FlavorConfig.autoDetect();
-  print('[Main] Flavor: ${FlavorConfig.instance.name}');
   
   SecureAppConfig? config;
   
   // 1. Fetch secure configuration from Firestore
   if (!kIsWeb) {
     try {
-      print('[Main] Fetching secure configuration from Firestore...');
       config = await ConfigService.getSecureConfig(forceRefresh: kDebugMode);
-      print('[Main] Secure config loaded: isLegacy=${config.isLegacy}, firebase=${config.firebaseProject}');
     } catch (e) {
       print('[Main] Failed to fetch secure config: $e');
-      print('[Main] App will continue with limited functionality');
     }
   }
   
@@ -108,7 +98,6 @@ void main() async {
       // from native platform configs (google-services.json on Android,
       // GoogleService-Info.plist on iOS). Each flavor has its own Firebase project
       // configured statically in these files.
-      print('[Main] Initializing Firebase Messaging with config project: ${config.firebaseProject}');
       
       // Initialize Firebase Messaging Service
       // Note: config parameter is accepted for API compatibility but not used for
@@ -120,13 +109,9 @@ void main() async {
         baseUrl: 'https://europe-central2-development-417611.cloudfunctions.net/kanuj-wygrywaj-backend',
         registerPath: '/notifications/register-token',
       );
-      
-      print('[Main] Firebase Messaging configured');
     } catch (e) {
       print('[Main] Firebase configuration failed, continuing without it: $e');
     }
-  } else if (kIsWeb) {
-    print('[Main] Running on web, skipping Firebase initialization');
   }
   
   // 3. Run app with config (use a fallback if config failed to load)
@@ -134,7 +119,6 @@ void main() async {
   runApp(MyApp(config: config));
   } else {
     // Fallback for web or if config fetch failed
-    print('[Main] Running with fallback configuration');
     runApp(const MyApp(config: null));
   }
 }
@@ -148,10 +132,6 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     // Determine theme based on isLegacy from configuration
     final bool isLegacyMode = config?.isLegacy ?? true;
-    final String modeLabel = isLegacyMode ? 'Legacy Mode' : 'Modern Mode';
-    
-    print('[MyApp] UI Mode: $modeLabel (isLegacy=$isLegacyMode)');
-    
     // Different themes for legacy and new mode
     final ThemeData appTheme = isLegacyMode 
       ? ThemeData(

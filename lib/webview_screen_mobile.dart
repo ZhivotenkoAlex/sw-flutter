@@ -716,8 +716,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
     
     final localPosition = box.globalToLocal(globalPosition);
     
+    // Account for SafeArea offset in release mode
+    final safeAreaTop = MediaQuery.of(context).padding.top;
+    final adjustedY = localPosition.dy - safeAreaTop;
+    
     // Check if tap is in top-left corner (100x100 pixels)
-    if (localPosition.dx > 100 || localPosition.dy > 100) {
+    // In release mode, SafeArea adds padding, so we need to account for it
+    if (localPosition.dx > 100 || adjustedY > 100 || adjustedY < 0) {
       _secretTapCount = 0;
       _lastTapTime = null;
       return;
@@ -733,7 +738,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
     _secretTapCount++;
     _lastTapTime = now;
     
-    debugPrint('[SECRET] Tap count: $_secretTapCount/$_secretTapThreshold at (${localPosition.dx}, ${localPosition.dy})');
+    // Log in release mode too (using print instead of debugPrint)
+    print('[SECRET] Tap count: $_secretTapCount/$_secretTapThreshold at (${localPosition.dx}, ${adjustedY})');
     
     if (_secretTapCount >= _secretTapThreshold) {
       _secretTapCount = 0;
@@ -2674,16 +2680,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 ], // children of Column
               ), // Column
               // Invisible tap area for secret gesture (top-left corner)
-              // IgnorePointer allows taps to pass through to WebView below
+              // GestureDetector on Scaffold body handles taps, this is just a visual marker
               Positioned(
                 top: 0,
                 left: 0,
-                child: IgnorePointer(
-                  child: Container(
-                    width: 100,
-                    height: 100,
-                    color: Colors.transparent,
-                  ),
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  color: Colors.transparent,
                 ),
               ),
             ], // children of Stack

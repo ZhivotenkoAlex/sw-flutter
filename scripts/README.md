@@ -107,21 +107,51 @@ Next steps:
 
 ### Updating Configurations
 
+**⚠️ CRITICAL: Always increment version when updating configs**
+
 To update an existing configuration:
 
 1. Edit the `configs` object in `populate_firestore_config.js`
-2. **Important**: Increment the `version` field to invalidate cached configs
-3. Run the script again
+2. **⚠️ REQUIRED**: Increment the `version` field - this triggers automatic config refresh
+3. **⚠️ IMPORTANT**: Ensure `firebaseConfigAndroid.projectId` matches native `google-services.json`:
+   - `galeriaKazimierz` flavor → `galeria-kazimierz-827d4`
+   - `galeriaKazimierzNew` flavor → `development-417611`
+4. Run the script again
 
 Example:
 
 ```javascript
 'galeria-kazimierz': {
-  // ... other fields ...
+  firebaseConfig: {
+    android: {
+      // ⚠️ CRITICAL: Must match google-services.json!
+      projectId: 'galeria-kazimierz-827d4',
+      // ... other fields from google-services.json
+    }
+  },
   webviewUrl: 'https://new-url.example.com',
-  version: 2  // Incremented from 1
+  firebaseProject: 'galeria-kazimierz-827d4',  // Must match android projectId
+  version: 2  // ⚠️ REQUIRED: Incremented from 1
 }
 ```
+
+**Why version is critical:**
+- App caches configuration locally for performance
+- When version is incremented, app automatically detects change
+- Users get new config on next app launch (no cache clearing needed)
+- Without version increment, changes may take up to 1 hour to appear
+
+### Available Scripts
+
+- **`populate_firestore_config.js`** - Populate/update all configurations
+- **`update_single_config.js`** - Update single config (galeria-kazimierz) to new app config
+- **`rollback_to_old_config.js`** - Rollback galeria-kazimierz to old/legacy config
+- **`verify_firestore_data.js`** - Verify configurations in Firestore
+- **`fix_galeria_kazimierz_firebase_config.js`** - Fix firebaseConfigAndroid to match google-services.json
+
+**All scripts support:**
+- Service account key authentication (`scripts/firebase-service-account.json`)
+- gcloud auth fallback (`gcloud auth application-default login`)
 
 ### Security Note
 

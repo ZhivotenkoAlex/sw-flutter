@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
@@ -29,27 +30,33 @@ class FirebaseMessagingService {
   /// It's kept for API compatibility with other parts of the app.
   static Future<void> initialize({AppConfig? config}) async {
     try {
-      print('[FCM] initialize() start');
-      
       // Use default FirebaseMessaging instance
       // Firebase is already initialized by native platform before Dart code runs
       final messaging = FirebaseMessaging.instance;
       
       await messaging.setAutoInitEnabled(true);
-      // Proactively ensure permission at startup, but only if not decided yet
+      
+      // CRITICAL: Request permission BEFORE getting token on Android 13+
+      // This ensures permission dialog appears in release builds
       await _ensurePermissionIfNeeded(messaging: messaging);
 
-      _fcmToken = await messaging.getToken();
-      print('[FCM] ✅ Initial FCM token obtained: ${_fcmToken != null ? 'tokenLen=${_fcmToken!.length}' : 'null'}');
-      if (_fcmToken != null) {
-        print('[FCM] Token preview: ${_fcmToken!.substring(0, _fcmToken!.length > 50 ? 50 : _fcmToken!.length)}...');
+      // Get token - on older Android versions permission is not required
+      // On Android 13+ token will be null if permission denied, but we still try
+      try {
+        _fcmToken = await messaging.getToken();
+        if (_fcmToken != null) {
+          print('[FCM] Token obtained: length=${_fcmToken!.length}');
+        } else {
+          print('[FCM] Token is null - permission may be denied');
+        }
+      } catch (e) {
+        print('[FCM] Failed to get token: $e');
       }
 
       // If API client configured and we have a user, the host code can call
       // registerToken(userId) afterwards. We only set up refresh forwarding here.
       messaging.onTokenRefresh.listen((newToken) async {
         _fcmToken = newToken;
-        print('[FCM] onTokenRefresh -> ' + (newToken));
         await _autoUpsertIfPossible();
         await _autoRegister2TakeIfPossible();
       });
@@ -60,27 +67,21 @@ class FirebaseMessagingService {
           final messageId = message.messageId ?? 'null';
           final title = message.notification?.title ?? '';
           final body = message.notification?.body ?? '';
-          final sentTime = message.sentTime?.toString() ?? 'null';
           final from = message.from ?? 'null';
-          print('[FCM] onMessage messageId="' + messageId + '" from="' + from + '" sentTime="' + sentTime + '" title="' + title + '" body="' + body + '" data=' + message.data.toString());
-        } catch (_) {}
+          print('[FCM] ✅ Message received: "$title" / "$body" (from: $from, id: $messageId)');
+        } catch (e) {
+          print('[FCM] ❌ onMessage ERROR: $e');
+        }
       });
 
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-        try {
-          final messageId = message.messageId ?? 'null';
-          final sentTime = message.sentTime?.toString() ?? 'null';
-          final from = message.from ?? 'null';
-          final click = message.data['click_action'] ?? message.notification?.android?.clickAction ?? '';
-          print('[FCM] onMessageOpenedApp messageId="' + messageId + '" from="' + from + '" sentTime="' + sentTime + '" click="' + click + '" data=' + message.data.toString());
-        } catch (_) {}
+        // Silent handler - no logging needed
       });
 
       _initialized = true;
       // Try an initial upsert if we already know the user
       await _autoUpsertIfPossible();
       await _autoRegister2TakeIfPossible();
-      print('[FCM] initialize() done');
     } catch (_) { _initialized = true; }
   }
 
@@ -90,7 +91,6 @@ class FirebaseMessagingService {
   // ---------- API helpers -------------------------------------------------
 
   static Future<String?> _awaitFcmToken({Duration timeout = const Duration(seconds: 8)}) async {
-    print('[FCM] _awaitFcmToken() begin, current=' + (_fcmToken ?? 'null'));
     // Use default messaging instance
     final messaging = FirebaseMessaging.instance;
     // Ensure permission only if not granted
@@ -98,25 +98,21 @@ class FirebaseMessagingService {
     var t = _fcmToken ?? await messaging.getToken();
     if (t != null && t.isNotEmpty) { 
       _fcmToken = t; 
-      print('[FCM] _awaitFcmToken() immediate token=' + t);
       return t; 
     }
     try { 
       t = await messaging.onTokenRefresh.first.timeout(timeout); 
-      print('[FCM] _awaitFcmToken() from onTokenRefresh token=' + (t ?? 'null')); 
     } catch (e) { 
-      print('[FCM] _awaitFcmToken() refresh timeout/error: ' + e.toString()); 
+      // Timeout is expected if token already available
     }
     if (t == null || t.isEmpty) {
       try { 
         t = await messaging.getToken(); 
-        print('[FCM] getToken after permission token=' + (t ?? 'null')); 
       } catch (e) { 
-        print('[FCM] getToken error: ' + e.toString()); 
+        print('[FCM] getToken error: $e'); 
       }
     }
     if (t != null && t.isNotEmpty) _fcmToken = t;
-    print('[FCM] _awaitFcmToken() result=' + (t ?? 'null') + ' tokenLen=' + (t?.length.toString() ?? '0'));
     return t;
   }
 
@@ -125,57 +121,70 @@ class FirebaseMessagingService {
     try {
       final settings = await messagingInstance.getNotificationSettings();
       final status = settings.authorizationStatus;
-      print('[FCM] permission status: ' + status.toString());
+      print('[FCM] Current permission status: $status');
+      
       // Already granted (full or provisional)
       if (status == AuthorizationStatus.authorized || status == AuthorizationStatus.provisional) {
+        print('[FCM] Permission already granted');
         if (Platform.isIOS) {
           try {
-            final apns = await messagingInstance.getAPNSToken();
-            print('[FCM] APNs token: ' + (apns ?? 'null'));
+            await messagingInstance.getAPNSToken();
             await messagingInstance.setForegroundNotificationPresentationOptions(
               alert: true, badge: true, sound: true,
             );
-          } catch (e) { print('[FCM] getAPNSToken error: ' + e.toString()); }
+          } catch (e) { 
+            // APNs token may not be available immediately
+          }
         }
         return true;
       }
-      // First-run (not decided yet)
-      if (status == AuthorizationStatus.notDetermined) {
-        if (Platform.isIOS) {
+      
+      // On Android 13+ (API 33+), always request permission if not granted
+      // This ensures permission dialog appears in release builds
+      if (Platform.isAndroid) {
+        print('[FCM] Requesting notification permission on Android...');
+        final perm = await messagingInstance.requestPermission(
+          alert: true, 
+          badge: true, 
+          sound: true,
+        );
+        final granted = perm.authorizationStatus == AuthorizationStatus.authorized;
+        print('[FCM] Permission request result: ${perm.authorizationStatus} (granted: $granted)');
+        return granted;
+      }
+      
+      // iOS handling
+      if (Platform.isIOS) {
+        if (status == AuthorizationStatus.notDetermined) {
           // Request full permission on iOS so alerts/badges/sounds show immediately
+          print('[FCM] Requesting notification permission on iOS...');
           final perm = await messagingInstance.requestPermission(
             alert: true, badge: true, sound: true, provisional: false,
           );
           final ok = perm.authorizationStatus == AuthorizationStatus.authorized ||
               perm.authorizationStatus == AuthorizationStatus.provisional;
+          print('[FCM] Permission request result: ${perm.authorizationStatus} (granted: $ok)');
           if (ok) {
             try {
               final apns = await messagingInstance.getAPNSToken();
-              print('[FCM] APNs token (post-request): ' + (apns ?? 'null'));
               await messagingInstance.setForegroundNotificationPresentationOptions(
                 alert: true, badge: true, sound: true,
               );
-            } catch (e) { print('[FCM] getAPNSToken error: ' + e.toString()); }
+            } catch (e) { 
+              // APNs token may not be available immediately
+            }
           }
           return ok;
-        } else {
-          // Android: normal prompt
-          final perm = await messagingInstance.requestPermission(alert: true, badge: true, sound: true);
-          return perm.authorizationStatus == AuthorizationStatus.authorized;
+        } else if (status == AuthorizationStatus.denied) {
+          // iOS denied - user must go to Settings
+          print('[FCM] Permission denied on iOS - user must enable in Settings');
+          return false;
         }
       }
-      // Denied/ephemeral
-      if (status == AuthorizationStatus.denied) {
-        // Android can re-prompt; iOS must go to Settings
-        if (Platform.isAndroid) {
-          final perm = await messagingInstance.requestPermission(alert: true, badge: true, sound: true);
-          return perm.authorizationStatus == AuthorizationStatus.authorized;
-        }
-        return false;
-      }
+      
       return false;
     } catch (e) {
-      print('[FCM] _ensurePermissionIfNeeded error: ' + e.toString());
+      print('[FCM] Permission check error: $e');
       return false;
     }
   }
@@ -185,13 +194,16 @@ class FirebaseMessagingService {
     try {
       final messaging = FirebaseMessaging.instance;
       final result = await messaging.requestPermission(alert: true, badge: true, sound: true);
-      print('[FCM] requestPermission -> ' + result.authorizationStatus.toString());
       if (Platform.isIOS) {
-        try { final apns = await messaging.getAPNSToken(); print('[FCM] APNs token (post-request explicit): ' + (apns ?? 'null')); } catch (e) { print('[FCM] getAPNSToken error: ' + e.toString()); }
+        try { 
+          final apns = await messaging.getAPNSToken(); 
+        } catch (e) { 
+          // APNs token may not be available immediately
+        }
       }
       return result.authorizationStatus;
     } catch (e) {
-      print('[FCM] requestNotificationsPermission error: ' + e.toString());
+      print('[FCM] requestNotificationsPermission error: $e');
       return AuthorizationStatus.denied;
     }
   }
@@ -209,11 +221,11 @@ class FirebaseMessagingService {
   }
 
   static Future<void> _autoUpsertIfPossible() async {
-    if (_api == null) { print('[FCM] skip upsert: api not configured'); return; }
-    if (_currentUserId == null) { print('[FCM] skip upsert: user not set'); return; }
+    if (_api == null) { return; }
+    if (_currentUserId == null) { return; }
     final token = await _awaitFcmToken();
-    if (token == null || token.isEmpty) { print('[FCM] skip upsert: token missing'); return; }
-    if (_lastSentToken == token) { print('[FCM] skip upsert: token unchanged'); return; }
+    if (token == null || token.isEmpty) { return; }
+    if (_lastSentToken == token) { return; }
     final packageId = await _getPackageId();
     await _api!.upsertToken(
       userId: _currentUserId!,
@@ -224,7 +236,6 @@ class FirebaseMessagingService {
       extra: _currentExtra,
     );
     _lastSentToken = token;
-    print('[FCM] upsert done for user=' + (_currentUserId ?? '-') + ' tokenLen=' + token.length.toString());
   }
 
   // ---------- 2take.it helpers -------------------------------------------
@@ -232,7 +243,6 @@ class FirebaseMessagingService {
     _loyaltyCompany = company;
     _loyaltyUid = uid;
     final token = await _awaitFcmToken();
-    print('[2TAKE] register2TakeToken company=' + company + ' uid=' + (uid ?? '-') + ' tokenLen=' + ((token ?? '').length).toString());
     if (token == null || token.isEmpty) return;
     await _loyalty.saveToken(company: company, uid: uid, token: token);
   }
@@ -241,16 +251,15 @@ class FirebaseMessagingService {
     _loyaltyCompany = company;
     _loyaltyUid = uid;
     _fcmToken ??= token;
-    print('[2TAKE] register2TakeTokenWith company=' + company + ' uid=' + (uid ?? '-') + ' tokenLen=' + token.length.toString());
     await _loyalty.saveToken(company: company, uid: uid, token: token);
     _lastSentToken = token;
   }
 
   static Future<void> _autoRegister2TakeIfPossible() async {
-    if (_loyaltyCompany == null) { print('[2TAKE] skip: company not set'); return; }
+    if (_loyaltyCompany == null) { return; }
     final token = await _awaitFcmToken();
-    if (token == null || token.isEmpty) { print('[2TAKE] skip: no token'); return; }
-    if (_lastSentToken == token) { print('[2TAKE] skip: same token'); return; }
+    if (token == null || token.isEmpty) { return; }
+    if (_lastSentToken == token) { return; }
     await _loyalty.saveToken(company: _loyaltyCompany!, uid: _loyaltyUid, token: token);
     _lastSentToken = token;
   }
@@ -259,7 +268,6 @@ class FirebaseMessagingService {
     _currentUserId = userId;
     _currentCompany = company;
     _currentExtra = extra;
-    print('[FCM] setLoggedInUser user=' + userId + ' company=' + (company ?? '-'));
     // Fire and forget
     _autoUpsertIfPossible();
     _autoRegister2TakeIfPossible();
@@ -291,7 +299,6 @@ class FirebaseMessagingService {
     _currentUserId = userId;
     _currentCompany = company;
     _currentExtra = extra;
-    print('[FCM] registerToken called for user=' + userId + ' company=' + (company ?? '-'));
     await _ensurePermissionIfNeeded();
     await _autoUpsertIfPossible();
   }
@@ -308,7 +315,6 @@ class FirebaseMessagingService {
     _currentCompany = company;
     _currentExtra = extra;
     _fcmToken ??= token;
-    print('[FCM] registerTokenWith override token len=' + token.length.toString());
     await _ensurePermissionIfNeeded();
     final packageId = await _getPackageId();
     await _api!.upsertToken(
@@ -353,21 +359,14 @@ class TwoTakeLoyaltyPushClient {
         : 'https://2take.it/loyalty/index.php/site/pushtokensave/c/' + company;
     final Map<String, String> body = isGuest ? {'token': token} : {'uid': uid, 'token': token};
     final uri = Uri.parse(url);
-    print('[2TAKE] POST ' + url + ' body=' + body.toString());
     final resp = await http.post(
       uri,
       headers: {'Content-Type': 'application/x-www-form-urlencoded'},
       body: body,
     );
-    print('[2TAKE] status=' + resp.statusCode.toString() + ' len=' + resp.body.length.toString());
-    try {
-      final String b = resp.body;
-      final String snippet = b.length > 400 ? (b.substring(0, 400) + '…') : b;
-      print('[2TAKE] body=' + snippet);
-    } catch (_) {}
     if (resp.statusCode >= 300) {
-      print('[2TAKE] ERROR body=' + resp.body);
-      throw Exception('loyalty save failed: ' + resp.statusCode.toString());
+      print('[2TAKE] ERROR: HTTP ${resp.statusCode}');
+      throw Exception('loyalty save failed: ${resp.statusCode}');
     }
   }
 }

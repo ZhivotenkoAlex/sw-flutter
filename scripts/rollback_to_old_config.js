@@ -14,19 +14,49 @@
  */
 
 const admin = require('firebase-admin');
+const path = require('path');
+const fs = require('fs');
 
 // Initialize Firebase Admin SDK
-try {
-    admin.initializeApp({
-        projectId: 'development-417611'
-    });
-    console.log('✓ Firebase Admin SDK initialized');
-} catch (error) {
-    console.error('✗ Failed to initialize Firebase Admin SDK:', error.message);
-    console.error('\nPlease ensure you have authentication set up:');
-    console.error('  1. Install: npm install firebase-admin');
-    console.error('  2. Auth: gcloud auth application-default login');
-    process.exit(1);
+// Try service account key first, fallback to gcloud auth
+let initialized = false;
+const serviceAccountPath = process.env.SERVICE_ACCOUNT_KEY || path.join(__dirname, 'firebase-service-account.json');
+
+// Try service account key
+if (fs.existsSync(serviceAccountPath)) {
+    try {
+        const serviceAccount = require(serviceAccountPath);
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+            projectId: 'development-417611'
+        });
+        console.log(`✓ Firebase Admin SDK initialized with service account: ${serviceAccountPath}`);
+        initialized = true;
+    } catch (error) {
+        console.warn(`⚠ Failed to use service account: ${error.message}`);
+        console.warn('  Falling back to gcloud auth...');
+    }
+}
+
+// Fallback to gcloud auth (Application Default Credentials)
+if (!initialized) {
+    try {
+        admin.initializeApp({
+            projectId: 'development-417611'
+        });
+        console.log('✓ Firebase Admin SDK initialized with gcloud auth');
+        initialized = true;
+    } catch (error) {
+        console.error('✗ Failed to initialize Firebase Admin SDK:', error.message);
+        console.error('\nPlease set up authentication:');
+        console.error('  Option 1: Service account key');
+        console.error('    1. Download from Firebase Console → Project Settings → Service Accounts');
+        console.error('    2. Save as: scripts/firebase-service-account.json');
+        console.error('    3. Or set SERVICE_ACCOUNT_KEY environment variable');
+        console.error('  Option 2: gcloud auth');
+        console.error('    Run: gcloud auth application-default login');
+        process.exit(1);
+    }
 }
 
 // Get Firestore instance and configure it to use the skanuj-wygrywaj database
@@ -61,7 +91,7 @@ const oldConfig = {
     backendUrl: 'https://login.2take.it/',
     isLegacy: true,
     firebaseProject: 'galeria-kazimierz-827d4',
-    version: 3
+    version: 7
 };
 
 async function rollbackConfig() {
