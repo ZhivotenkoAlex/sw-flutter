@@ -1,13 +1,9 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'app_config.dart';
-import 'firebase_config_loader.dart';
 
 class FirebaseMessagingService {
   static String? _fcmToken;
@@ -22,148 +18,21 @@ class FirebaseMessagingService {
   static String? _loyaltyCompany;
   static String? _loyaltyUid;
   static String? _cachedPackageId;
-  // Named Firebase app for messaging (allows switching projects dynamically)
-  // Note: Currently using default app approach due to FirebaseMessaging API limitations
-  static FirebaseApp? _messagingApp;
 
+  /// Initialize Firebase Cloud Messaging
+  /// 
+  /// Uses the default Firebase app that's auto-initialized from native configs:
+  /// - Android: google-services.json (per flavor)
+  /// - iOS: GoogleService-Info.plist (per scheme)
+  /// 
+  /// The config parameter is accepted but not used for messaging initialization.
+  /// It's kept for API compatibility with other parts of the app.
   static Future<void> initialize({AppConfig? config}) async {
     try {
       print('[FCM] initialize() start');
       
-      if (config == null) {
-        print('[FCM] No config provided, using default Firebase initialization');
-        try {
-          await Firebase.initializeApp();
-        } catch (e) {
-          print('[FCM] Firebase already initialized or error: $e');
-        }
-        try { print('[FCM] projectId=' + (Firebase.app().options.projectId ?? '-')); } catch (_) {}
-      } else {
-        // Get Firebase options from config
-        final firebaseOptions = await FirebaseConfigLoader.loadFirebaseOptions(config);
-        final expectedProjectId = firebaseOptions.projectId;
-        print('[FCM] Expected project from config: $expectedProjectId');
-        
-        // Strategy: Initialize DEFAULT app with config's project
-        // Bootstrap does NOT initialize default app, so we can initialize it here
-        // with the correct project from config
-        bool needsInit = false;
-        
-        // Check if default app exists and matches config
-        try {
-          final existingApp = Firebase.app();
-          final currentProjectId = existingApp.options.projectId;
-          print('[FCM] Default app exists, current project: $currentProjectId');
-          
-          // Check if project matches config
-          if (currentProjectId != expectedProjectId) {
-            print('[FCM] ⚠️ Project mismatch! Current: $currentProjectId, Expected: $expectedProjectId');
-            // On Android, default app cannot be deleted, so we log a warning
-            // On iOS, we can try to delete and reinitialize
-            if (Platform.isAndroid) {
-              print('[FCM] ⚠️ Android: Cannot delete default app. Messaging will use existing project.');
-              print('[FCM] ⚠️ To switch projects, app must be reinstalled or use a different approach.');
-              // Save current app options anyway
-              try {
-                await _saveMessagingAppOptions(existingApp.options);
-              } catch (e) {
-                print('[FCM] Error saving app options: $e');
-              }
-              // Continue execution - we'll use the existing app
-              // FCM token will be obtained from the existing project
-            } else {
-              // iOS: Try to delete and reinitialize
-              print('[FCM] iOS: Will try to delete and reinitialize default app');
-              needsInit = true;
-            }
-          } else {
-            print('[FCM] ✅ Project matches config, using existing default app');
-            // Save current app options for background handler
-            try {
-              await _saveMessagingAppOptions(existingApp.options);
-            } catch (e) {
-              print('[FCM] Error saving app options: $e');
-            }
-          }
-        } catch (e) {
-          // Default app doesn't exist, create it
-          print('[FCM] Default app not found, will create it');
-          needsInit = true;
-        }
-        
-        // Initialize default app if needed
-        if (needsInit) {
-          // Clear old token when switching projects
-          final oldToken = _fcmToken;
-          if (oldToken != null) {
-            print('[FCM] Clearing old token from previous project (tokenLen=${oldToken.length})');
-            _fcmToken = null;
-            _lastSentToken = null;
-          }
-          
-          // On iOS, try to delete default app before reinitializing
-          if (Platform.isIOS) {
-            try {
-              await Firebase.app().delete();
-              print('[FCM] Deleted existing default app (iOS)');
-            } catch (e) {
-              print('[FCM] Could not delete default app (iOS): $e');
-            }
-          }
-          
-          // Initialize default app with config's Firebase options
-          try {
-            await Firebase.initializeApp(options: firebaseOptions);
-            print('[FCM] ✅ Initialized default app with project: $expectedProjectId');
-            
-            // Enable App Check for the default app
-            try {
-              await FirebaseAppCheck.instance.activate(
-                androidProvider: AndroidProvider.playIntegrity,
-                appleProvider: AppleProvider.deviceCheck,
-              );
-              print('[FCM] App Check enabled for default app');
-            } catch (e) {
-              print('[FCM] App Check enable error: $e');
-            }
-            
-            // On iOS, ensure APNs token is set after re-initialization
-            if (Platform.isIOS) {
-              try {
-                // Request APNs token - this will trigger AppDelegate to set it
-                final apnsToken = await FirebaseMessaging.instance.getAPNSToken();
-                if (apnsToken != null) {
-                  print('[FCM] ✅ APNs token available after re-init: ${apnsToken.substring(0, 20)}...');
-                } else {
-                  print('[FCM] ⚠️ APNs token not available yet (will be set by AppDelegate)');
-                }
-              } catch (e) {
-                print('[FCM] APNs token check error: $e');
-              }
-            }
-            
-            // Save messaging app options to SharedPreferences for background handler
-            await _saveMessagingAppOptions(firebaseOptions);
-          } catch (e) {
-            print('[FCM] Error initializing default app: $e');
-            // If initialization fails, try to use existing app
-            try {
-              final existingApp = Firebase.app();
-              print('[FCM] ⚠️ Using existing default app: ${existingApp.options.projectId}');
-              if (existingApp.options.projectId != expectedProjectId) {
-                print('[FCM] ⚠️ WARNING: Project mismatch! Messaging may not work correctly.');
-              }
-              // Save existing app options anyway
-              await _saveMessagingAppOptions(existingApp.options);
-            } catch (_) {
-              print('[FCM] No Firebase app available');
-            }
-          }
-        }
-      }
-      
       // Use default FirebaseMessaging instance
-      // Note: onMessage and onMessageOpenedApp are static and work with default app only
+      // Firebase is already initialized by native platform before Dart code runs
       final messaging = FirebaseMessaging.instance;
       
       await messaging.setAutoInitEnabled(true);
@@ -217,47 +86,6 @@ class FirebaseMessagingService {
 
   static String? get fcmToken => _fcmToken;
   static bool get isInitialized => _initialized;
-
-  // Save messaging app options for background handler
-  static Future<void> _saveMessagingAppOptions(FirebaseOptions options) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('fcm_messaging_app_project_id', options.projectId ?? '');
-      await prefs.setString('fcm_messaging_app_api_key', options.apiKey ?? '');
-      await prefs.setString('fcm_messaging_app_app_id', options.appId ?? '');
-      await prefs.setString('fcm_messaging_app_messaging_sender_id', options.messagingSenderId ?? '');
-      await prefs.setString('fcm_messaging_app_storage_bucket', options.storageBucket ?? '');
-      await prefs.setString('fcm_messaging_app_database_url', options.databaseURL ?? '');
-      if (Platform.isIOS && options.iosBundleId != null) {
-        await prefs.setString('fcm_messaging_app_ios_bundle_id', options.iosBundleId!);
-      }
-      print('[FCM] Saved messaging app options for background handler');
-    } catch (e) {
-      print('[FCM] Error saving messaging app options: $e');
-    }
-  }
-
-  // Load messaging app options for background handler
-  static Future<FirebaseOptions?> _loadMessagingAppOptions() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final projectId = prefs.getString('fcm_messaging_app_project_id');
-      if (projectId == null || projectId.isEmpty) return null;
-      
-      return FirebaseOptions(
-        apiKey: prefs.getString('fcm_messaging_app_api_key') ?? '',
-        appId: prefs.getString('fcm_messaging_app_app_id') ?? '',
-        messagingSenderId: prefs.getString('fcm_messaging_app_messaging_sender_id') ?? '',
-        projectId: projectId,
-        storageBucket: prefs.getString('fcm_messaging_app_storage_bucket'),
-        databaseURL: prefs.getString('fcm_messaging_app_database_url'),
-        iosBundleId: Platform.isIOS ? prefs.getString('fcm_messaging_app_ios_bundle_id') : null,
-      );
-    } catch (e) {
-      print('[FCM] Error loading messaging app options: $e');
-      return null;
-    }
-  }
 
   // ---------- API helpers -------------------------------------------------
 
@@ -523,7 +351,7 @@ class TwoTakeLoyaltyPushClient {
     final String url = isGuest
         ? 'https://2take.it/loyalty/index.php/site/pushtokensaveguest/c/' + company
         : 'https://2take.it/loyalty/index.php/site/pushtokensave/c/' + company;
-    final Map<String, String> body = isGuest ? {'token': token} : {'uid': uid!, 'token': token};
+    final Map<String, String> body = isGuest ? {'token': token} : {'uid': uid, 'token': token};
     final uri = Uri.parse(url);
     print('[2TAKE] POST ' + url + ' body=' + body.toString());
     final resp = await http.post(

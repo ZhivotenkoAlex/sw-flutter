@@ -14,6 +14,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'app_config.dart';
 import 'services/secure_config_service.dart';
+import 'flavor_config.dart';
+
+/// Static mapping of companyId to Google Sign-In Web Client ID
+/// Each company has its own Firebase project for Google Authentication
+const Map<String, String> _googleAuthClientIds = {
+  'galeria-kazimierz': '839029981684-v8su4cmc72t498k2evmejnohi0pk7v3c.apps.googleusercontent.com',
+  'kazimierz-club-new': '159120615271-s2fbutrvvgk39rq71fafmeadksmk4g4d.apps.googleusercontent.com',
+  // Add new companies here as needed
+};
 
 class WebViewScreen extends StatefulWidget {
   final AppConfig config;
@@ -760,6 +769,21 @@ class _WebViewScreenState extends State<WebViewScreen> {
             userAgent: 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36 SkanujWygrywaj/Flutter',
           ),
           initialUserScripts: UnmodifiableListView<UserScript>([
+            // Flutter Config injection - make backend URL available to all scripts
+            UserScript(
+              source: '''
+                (function(){
+                  try {
+                    window.FlutterConfig = {
+                      backendUrl: '${widget.config is SecureAppConfig ? (widget.config as SecureAppConfig).backendUrl.replaceAll("'", "\\'") : ""}'
+                    };
+                    console.log('[FLUTTER] Config injected, backendUrl:', window.FlutterConfig.backendUrl);
+                  } catch(e) { console.error('[FLUTTER] Config injection failed', e); }
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+              forMainFrameOnly: false,
+            ),
             // APP2TI/postMessage bridge
             UserScript(
               source: _app2tiBridgeJs,
@@ -914,61 +938,73 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       const company = q.get('company_name') || (window.companyconfig && window.companyconfig.getCompanyIdfromUrl && window.companyconfig.getCompanyIdfromUrl()) || '';
                       const legacy = !!q.get('legacy');
 
-                      // Force single endpoint for this host
-                      try {
-                        const fixedUrl = 'https://login.2take.it/api/web/user/google-login';
-                        console.log('[NATIVE->WEB] using fixed login URL', fixedUrl);
-                        const r = await fetch(fixedUrl, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          credentials: 'include',
-                          body: JSON.stringify({ access_token: idToken, company_url: company, invite_code: '', legacy })
-       
-                        });
-                        console.log('[NATIVE->WEB] fixed login response', JSON.stringify(r));
-                        console.log("🚀 ~ idToken:", idToken);
-                        console.log("🚀 ~ company:", company);
-                        console.log("🚀 ~ legacy:", legacy);
-
-                        const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
-                        if (r.ok && ct.indexOf('application/json') >= 0) {
-                          const data = await r.json();
-                          console.log('[NATIVE->WEB] fixed login json', data);
-                          const urlToGo = (data && data.url) ? String(data.url) : '';
-                          if (urlToGo) {
-                            console.log('[NATIVE->WEB] fixed login ok; redirect:', urlToGo);
-                            location.replace(urlToGo);
-                            return true;
+                      // Legacy app: use fixed URL like in old_system branch
+                      if (legacy || company === 'galeria-kazimierz') {
+                        try {
+                          const fixedUrl = 'https://login.2take.it/api/web/user/google-login';
+                          console.log('[NATIVE->WEB] using fixed legacy login URL', fixedUrl);
+                          const r = await fetch(fixedUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ access_token: idToken, company_url: company, invite_code: '', legacy })
+                          });
+                          console.log('[NATIVE->WEB] legacy login http', r.status);
+                          const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+                          if (r.ok && ct.indexOf('application/json') >= 0) {
+                            const data = await r.json();
+                            const urlToGo = (data && data.url) ? String(data.url) : '';
+                            if (urlToGo) {
+                              console.log('[NATIVE->WEB] legacy login ok; redirect:', urlToGo);
+                              location.replace(urlToGo);
+                              return true;
+                            }
+                            if (data && data.token) {
+                              const ACCESS = 'access_token_' + company;
+                              const REFRESH = 'id_token_' + company;
+                              const EXP = 'expirationtime_' + company;
+                              localStorage.setItem(ACCESS, data.token);
+                              localStorage.setItem(REFRESH, data.refresh_token || '');
+                              const expMs = (Number(data.expiry_second || 0)*1000);
+                              const expDate = new Date(Date.now() + expMs - 18000);
+                              localStorage.setItem(EXP, expDate.toString());
+                              console.log('[NATIVE->WEB] legacy login ok; no url, reloading');
+                              location.reload();
+                              return true;
+                            }
+                            console.warn('[NATIVE->WEB] legacy login: no url or token in response');
+                          } else {
+                            console.warn('[NATIVE->WEB] legacy login http', r.status, 'at', fixedUrl);
                           }
-                          if (data && data.token) {
-                            const ACCESS = 'access_token_' + company;
-                            const REFRESH = 'id_token_' + company;
-                            const EXP = 'expirationtime_' + company;
-                            localStorage.setItem(ACCESS, data.token);
-                            localStorage.setItem(REFRESH, data.refresh_token || '');
-                            const expMs = (Number(data.expiry_second || 0)*1000);
-                            const expDate = new Date(Date.now() + expMs - 18000);
-                            localStorage.setItem(EXP, expDate.toString());
-                            console.log('[NATIVE->WEB] fixed login ok; no url, reloading');
-                            location.reload();
-                            return true;
-                          }
-                          console.warn('[NATIVE->WEB] fixed login: no url or token in response');
-                        } else {
-                          console.warn('[NATIVE->WEB] fixed login http', r.status, 'at', fixedUrl);
+                        } catch(e) {
+                          console.error('[NATIVE->WEB] legacy login error', e);
                         }
-                      } catch(e) { console.error('[NATIVE->WEB] fixed login fetch error', e); }
-                      return false;
+                        return false;
+                      }
 
-                      const origin = location.origin.replace(/\/+$/,'');
+                      // New app: use dynamic backend URLs
                       let bases = [];
+                      
+                      // Priority 1: Use Flutter-injected backend URL if available
+                      try {
+                        if (window.FlutterConfig && window.FlutterConfig.backendUrl) {
+                          bases.push(String(window.FlutterConfig.backendUrl).replace(/\/+$/,'/'));
+                        }
+                      } catch(_) {}
+                      
+                      // Priority 2: Check web app's own GlobalConfig
                       try {
                         if (window.GlobalConfig && window.GlobalConfig.baseUrl) {
                           bases.push(String(window.GlobalConfig.baseUrl).replace(/\/+$/,'/'));
                         }
                       } catch(_) {}
+                      
+                      // Fallback: Try web app's own endpoints
+                      const origin = location.origin.replace(/\/+$/,'');
                       bases.push(origin + '/api/');
                       bases.push(origin + '/api/web/');
+                      
+                      // Legacy fallbacks (for non-legacy apps that might need them)
                       bases.push('https://login.2take.it/api/web/');
                       bases.push('https://app.dev.2take.it/api/');
                       bases.push('https://app.blovly.com/api/');
@@ -976,20 +1012,57 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
                       async function tryLogin(base){
                         try {
-                          const url = base + 'user/google-login';
+                          // New backend (Cloud Functions) uses 'user/google-auth', old uses 'user/google-login'
+                          const isNewBackend = base.includes('.cloudfunctions.net');
+                          const endpoint = isNewBackend ? 'user/google-auth' : 'user/google-login';
+                          const url = base + endpoint;
                           console.log('[NATIVE->WEB] trying', url);
+                          
+                          // Build request body based on backend type
+                          let requestBody;
+                          if (isNewBackend) {
+                            // New backend format: user data nested in 'user' object
+                            requestBody = {
+                              company_url_name: company,
+                              inviteCode: null,
+                              legacy: legacy,
+                              user: {
+                                email: p.email || '',
+                                name: p.name || '',
+                                id: p.id || '',
+                                imageUrl: p.imageUrl || '',
+                                token: idToken
+                              }
+                            };
+                          } else {
+                            // Old backend format
+                            requestBody = {
+                              access_token: idToken,
+                              company_url: company,
+                              invite_code: '',
+                              legacy: legacy
+                            };
+                          }
+                          
                           const r = await fetch(url, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            credentials: 'include',
-                            body: JSON.stringify({ access_token: idToken, company_url: company, invite_code: '', legacy })
+                            body: JSON.stringify(requestBody)
                           });
-                          const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
-                          if (!r.ok || ct.indexOf('application/json') < 0) {
-                            console.warn('[NATIVE->WEB] login http', r.status, 'at', url);
+                          console.log('[NATIVE->WEB] login http', r.status, 'at', url);
+                          if (!r.ok) {
+                            console.log('[NATIVE->WEB] response not ok, status:', r.status);
                             return null;
                           }
-                          return await r.json();
+                          // Try to parse JSON even if content-type is missing/wrong
+                          try {
+                            const jsonData = await r.json();
+                            console.log('[NATIVE->WEB] response parsed, has token:', !!(jsonData.token || jsonData.access_token), 'keys:', Object.keys(jsonData));
+                            return jsonData;
+                          } catch(parseErr) {
+                            console.error('[NATIVE->WEB] JSON parse failed for', url, parseErr);
+                            return null;
+                          }
                         } catch(e) {
                           console.error('[NATIVE->WEB] login fetch error at', base, e);
                           return null;
@@ -999,24 +1072,54 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       let data = null; let usedBase = null;
                       for (let i = 0; i < bases.length && !data; i++) {
                         const d = await tryLogin(bases[i]);
-                        if (d && d.token) { data = d; usedBase = bases[i]; }
+                        console.log('[NATIVE->WEB] tryLogin result for', bases[i], ':', d ? 'has data' : 'null', d ? 'keys: ' + Object.keys(d) : '');
+                        // New backend returns 'access_token', old returns 'token'
+                        if (d && (d.token || d.access_token)) { 
+                          console.log('[NATIVE->WEB] ✅ Found valid response at', bases[i]);
+                          data = d; 
+                          usedBase = bases[i]; 
+                        } else {
+                          console.log('[NATIVE->WEB] ❌ Response invalid, missing token/access_token');
+                        }
                       }
-                      if (!data || !data.token) { console.error('[NATIVE->WEB] login failed for all bases', bases); return false; }
+                      if (!data || (!data.token && !data.access_token)) { 
+                        console.error('[NATIVE->WEB] login failed for all bases', bases); 
+                        return false; 
+                      }
                       console.log('[NATIVE->WEB] login ok at', usedBase, 'redirect:', (data && data.url) ? data.url : '');
 
                       const ACCESS = 'access_token_' + company;
                       const REFRESH = 'id_token_' + company;
                       const EXP = 'expirationtime_' + company;
-                      localStorage.setItem(ACCESS, data.token);
+                      // New backend uses 'access_token', old uses 'token'
+                      const tokenValue = data.access_token || data.token;
+                      localStorage.setItem(ACCESS, tokenValue);
                       localStorage.setItem(REFRESH, data.refresh_token || '');
                       const expMs = (Number(data.expiry_second || 0)*1000);
                       const expDate = new Date(Date.now() + expMs - 18000);
                       localStorage.setItem(EXP, expDate.toString());
 
-                      if (data.url) { location.href = data.url; }
-                      else {
-                        try { if (window.__appRouter && window.__appRouter.push) { window.__appRouter.push({ name: 'rules', query: { company_name: company } }); return true; } } catch(_){ }
-                        location.reload();
+                      if (data.url) { 
+                        location.href = data.url; 
+                      } else {
+                        // Check if this is new backend (Cloud Functions)
+                        const isNewBackend = usedBase && usedBase.includes('.cloudfunctions.net');
+                        if (isNewBackend) {
+                          // New backend doesn't return 'url', redirect to main page
+                          const origin = location.origin;
+                          const redirectUrl = origin + '/?company_name=' + encodeURIComponent(company);
+                          console.log('[NATIVE->WEB] redirecting to:', redirectUrl);
+                          location.href = redirectUrl;
+                        } else {
+                          // Old backend: try router first, then reload
+                          try { 
+                            if (window.__appRouter && window.__appRouter.push) { 
+                              window.__appRouter.push({ name: 'rules', query: { company_name: company } }); 
+                              return true; 
+                            } 
+                          } catch(_){ }
+                          location.reload();
+                        }
                       }
                       return true;
                     } catch(e) { console.error('onFlutterGoogleSignIn error', e); return false; }
@@ -1040,25 +1143,62 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       const company = q.get('company_name') || (window.companyconfig && window.companyconfig.getCompanyIdfromUrl && window.companyconfig.getCompanyIdfromUrl()) || '';
                       const legacy = !!q.get('legacy');
 
-                      try {
-                        const fixedUrl = 'https://login.2take.it/api/web/user/apple-login';
-                        console.log('[NATIVE->WEB][APPLE] using fixed login URL', fixedUrl);
-                        const r = await fetch(fixedUrl, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          credentials: 'include',
-                          body: JSON.stringify({ access_token: idToken, company_url: company, invite_code: '', legacy })
-                        });
-                        const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
-                        if (r.ok && ct.indexOf('application/json') >= 0) {
-                          const data = await r.json();
-                          console.log('[NATIVE->WEB][APPLE] login ok; redirect:', (data && data.url) ? data.url : 'reload');
-                          if (data && data.url) { location.replace(data.url); } else { location.reload(); }
-                          return true;
-                        } else {
-                          console.warn('[NATIVE->WEB][APPLE] login http', r && r.status);
-                        }
-                      } catch (e) { console.error('[NATIVE->WEB][APPLE] login error', e); }
+                      // Legacy app: use fixed URL like in old_system branch
+                      if (legacy || company === 'galeria-kazimierz') {
+                        try {
+                          const fixedUrl = 'https://login.2take.it/api/web/user/apple-login';
+                          console.log('[NATIVE->WEB][APPLE] using fixed legacy login URL', fixedUrl);
+                          const r = await fetch(fixedUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ access_token: idToken, company_url: company, invite_code: '', legacy })
+                          });
+                          const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+                          if (r.ok && ct.indexOf('application/json') >= 0) {
+                            const data = await r.json();
+                            console.log('[NATIVE->WEB][APPLE] legacy login ok; redirect:', (data && data.url) ? data.url : 'reload');
+                            if (data && data.url) { location.replace(data.url); } else { location.reload(); }
+                            return true;
+                          } else {
+                            console.warn('[NATIVE->WEB][APPLE] legacy login http', r && r.status);
+                          }
+                        } catch (e) { console.error('[NATIVE->WEB][APPLE] legacy login error', e); }
+                        return false;
+                      }
+
+                      // New app: use dynamic backend URLs
+                      let bases = [];
+                      try { if (window.FlutterConfig && window.FlutterConfig.backendUrl) { bases.push(String(window.FlutterConfig.backendUrl).replace(/\/+$/,'/')); } } catch(_) {}
+                      const origin = location.origin.replace(/\/+$/,'');
+                      bases.push(origin + '/api/');
+
+                      for (const base of bases) {
+                        try {
+                          // New backend uses 'user/apple-auth', old uses 'user/apple-login'
+                          const isNewBackend = base.includes('.cloudfunctions.net');
+                          const endpoint = isNewBackend ? 'user/apple-auth' : 'user/apple-login';
+                          const url = base + endpoint;
+                          console.log('[NATIVE->WEB][APPLE] trying', url);
+                          const r = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ access_token: idToken, company_url: company, invite_code: '', legacy })
+                          });
+                          console.log('[NATIVE->WEB][APPLE] login http', r.status);
+                          if (r.ok) {
+                            // Try to parse JSON even if content-type is missing/wrong
+                            try {
+                              const data = await r.json();
+                              console.log('[NATIVE->WEB][APPLE] login ok; redirect:', (data && data.url) ? data.url : 'reload');
+                              if (data && data.url) { location.replace(data.url); } else { location.reload(); }
+                              return true;
+                            } catch(parseErr) {
+                              console.error('[NATIVE->WEB][APPLE] JSON parse failed', parseErr);
+                            }
+                          }
+                        } catch (e) { console.error('[NATIVE->WEB][APPLE] login error at', base, e); }
+                      }
                       return false;
                     } catch(e) { console.error('onFlutterAppleSignIn error', e); return false; }
                   }
@@ -1393,60 +1533,73 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       const company = q.get('company_name') || (window.companyconfig && window.companyconfig.getCompanyIdfromUrl && window.companyconfig.getCompanyIdfromUrl()) || '';
                       const legacy = !!q.get('legacy');
 
-                      // Force single endpoint for this host
-                      try {
-                        const fixedUrl = 'https://login.2take.it/api/web/user/fblogin';
-                        console.log('[NATIVE->WEB] using fixed login URL', fixedUrl);
-                        const r = await fetch(fixedUrl, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          credentials: 'include',
-                          body: JSON.stringify({ access_token: accessToken, company_url: company, invite_code: '', legacy })
-                        });
-                        console.log('[NATIVE->WEB] fixed login response', JSON.stringify(r));
-                        console.log("🚀 ~ accessToken:", accessToken);
-                        console.log("🚀 ~ company:", company);
-                        console.log("🚀 ~ legacy:", legacy);
-
-                        const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
-                        if (r.ok && ct.indexOf('application/json') >= 0) {
-                          const data = await r.json();
-                          console.log('[NATIVE->WEB] fixed login json', data);
-                          const urlToGo = (data && data.url) ? String(data.url) : '';
-                          if (urlToGo) {
-                            console.log('[NATIVE->WEB] fixed login ok; redirect:', urlToGo);
-                            location.replace(urlToGo);
-                            return true;
+                      // Legacy app: use fixed URL like in old_system branch
+                      if (legacy || company === 'galeria-kazimierz') {
+                        try {
+                          const fixedUrl = 'https://login.2take.it/api/web/user/fblogin';
+                          console.log('[NATIVE->WEB] using fixed legacy login URL', fixedUrl);
+                          const r = await fetch(fixedUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ access_token: accessToken, company_url: company, invite_code: '', legacy })
+                          });
+                          console.log('[NATIVE->WEB] legacy login http', r.status);
+                          const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+                          if (r.ok && ct.indexOf('application/json') >= 0) {
+                            const data = await r.json();
+                            const urlToGo = (data && data.url) ? String(data.url) : '';
+                            if (urlToGo) {
+                              console.log('[NATIVE->WEB] legacy login ok; redirect:', urlToGo);
+                              location.replace(urlToGo);
+                              return true;
+                            }
+                            if (data && data.token) {
+                              const ACCESS = 'access_token_' + company;
+                              const REFRESH = 'id_token_' + company;
+                              const EXP = 'expirationtime_' + company;
+                              localStorage.setItem(ACCESS, data.token);
+                              localStorage.setItem(REFRESH, data.refresh_token || '');
+                              const expMs = (Number(data.expiry_second || 0)*1000);
+                              const expDate = new Date(Date.now() + expMs - 18000);
+                              localStorage.setItem(EXP, expDate.toString());
+                              console.log('[NATIVE->WEB] legacy login ok; no url, reloading');
+                              location.reload();
+                              return true;
+                            }
+                            console.warn('[NATIVE->WEB] legacy login: no url or token in response');
+                          } else {
+                            console.warn('[NATIVE->WEB] legacy login http', r.status, 'at', fixedUrl);
                           }
-                          if (data && data.token) {
-                            const ACCESS = 'access_token_' + company;
-                            const REFRESH = 'id_token_' + company;
-                            const EXP = 'expirationtime_' + company;
-                            localStorage.setItem(ACCESS, data.token);
-                            localStorage.setItem(REFRESH, data.refresh_token || '');
-                            const expMs = (Number(data.expiry_second || 0)*1000);
-                            const expDate = new Date(Date.now() + expMs - 18000);
-                            localStorage.setItem(EXP, expDate.toString());
-                            console.log('[NATIVE->WEB] fixed login ok; no url, reloading');
-                            location.reload();
-                            return true;
-                          }
-                          console.warn('[NATIVE->WEB] fixed login: no url or token in response');
-                        } else {
-                          console.warn('[NATIVE->WEB] fixed login http', r.status, 'at', fixedUrl);
+                        } catch(e) {
+                          console.error('[NATIVE->WEB] legacy login error', e);
                         }
-                      } catch(e) { console.error('[NATIVE->WEB] fixed login fetch error', e); }
-                      return false;
+                        return false;
+                      }
 
-                      const origin = location.origin.replace(/\/+$/,'');
+                      // New app: use dynamic backend URLs
                       let bases = [];
+                      
+                      // Priority 1: Use Flutter-injected backend URL if available
+                      try {
+                        if (window.FlutterConfig && window.FlutterConfig.backendUrl) {
+                          bases.push(String(window.FlutterConfig.backendUrl).replace(/\/+$/,'/'));
+                        }
+                      } catch(_) {}
+                      
+                      // Priority 2: Check web app's own GlobalConfig
                       try {
                         if (window.GlobalConfig && window.GlobalConfig.baseUrl) {
                           bases.push(String(window.GlobalConfig.baseUrl).replace(/\/+$/,'/'));
                         }
                       } catch(_) {}
+                      
+                      // Fallback: Try web app's own endpoints
+                      const origin = location.origin.replace(/\/+$/,'');
                       bases.push(origin + '/api/');
                       bases.push(origin + '/api/web/');
+                      
+                      // Legacy fallbacks (for non-legacy apps that might need them)
                       bases.push('https://login.2take.it/api/web/');
                       bases.push('https://app.dev.2take.it/api/');
                       bases.push('https://app.blovly.com/api/');
@@ -1454,20 +1607,27 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
                       async function tryLogin(base){
                         try {
-                          const url = base + 'user/facebook-login';
+                          // New backend (Cloud Functions) uses 'user/facebook-auth', old uses 'user/facebook-login'
+                          const isNewBackend = base.includes('.cloudfunctions.net');
+                          const endpoint = isNewBackend ? 'user/facebook-auth' : 'user/facebook-login';
+                          const url = base + endpoint;
                           console.log('[NATIVE->WEB] trying', url);
                           const r = await fetch(url, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            credentials: 'include',
                             body: JSON.stringify({ access_token: accessToken, company_url: company, invite_code: '', legacy })
                           });
-                          const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
-                          if (!r.ok || ct.indexOf('application/json') < 0) {
-                            console.warn('[NATIVE->WEB] login http', r.status, 'at', url);
+                          console.log('[NATIVE->WEB] login http', r.status, 'at', url);
+                          if (!r.ok) {
                             return null;
                           }
-                          return await r.json();
+                          // Try to parse JSON even if content-type is missing/wrong
+                          try {
+                            return await r.json();
+                          } catch(parseErr) {
+                            console.error('[NATIVE->WEB] JSON parse failed for', url, parseErr);
+                            return null;
+                          }
                         } catch(e) {
                           console.error('[NATIVE->WEB] login fetch error at', base, e);
                           return null;
@@ -1651,8 +1811,54 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       const q = new URLSearchParams(location.search);
                       const company = q.get('company_name') || (window.companyconfig && window.companyconfig.getCompanyIdfromUrl && window.companyconfig.getCompanyIdfromUrl()) || '';
                       const legacy = !!q.get('legacy');
+
+                      // Legacy app: use fixed URL like in old_system branch
+                      if (legacy || company === 'galeria-kazimierz') {
+                        try {
+                          const fixedUrl = 'https://login.2take.it/api/web/user/fblogin';
+                          console.log('[NATIVE->WEB][FB] using fixed legacy login URL', fixedUrl);
+                          const r = await fetch(fixedUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ access_token: accessToken, company_url: company, invite_code: '', legacy })
+                          });
+                          const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+                          if (r.ok && ct.indexOf('application/json') >= 0) {
+                            const data = await r.json();
+                            const urlToGo = (data && data.url) ? String(data.url) : '';
+                            if (urlToGo) {
+                              console.log('[NATIVE->WEB][FB] legacy login ok; redirect:', urlToGo);
+                              location.replace(urlToGo);
+                              return true;
+                            }
+                            if (data && data.token) {
+                              const ACCESS = 'access_token_' + company;
+                              const REFRESH = 'id_token_' + company;
+                              const EXP = 'expirationtime_' + company;
+                              localStorage.setItem(ACCESS, data.token);
+                              localStorage.setItem(REFRESH, data.refresh_token || '');
+                              const expMs = (Number(data.expiry_second || 0)*1000);
+                              const expDate = new Date(Date.now() + expMs - 18000);
+                              localStorage.setItem(EXP, expDate.toString());
+                              console.log('[NATIVE->WEB][FB] legacy login ok; no url, reloading');
+                              location.reload();
+                              return true;
+                            }
+                            console.warn('[NATIVE->WEB][FB] legacy login: no url or token in response');
+                          } else {
+                            console.warn('[NATIVE->WEB][FB] legacy login http', r.status, 'at', fixedUrl);
+                          }
+                        } catch(e) {
+                          console.error('[NATIVE->WEB][FB] legacy login error', e);
+                        }
+                        return false;
+                      }
+
+                      // New app: use dynamic backend URLs
                       const origin = location.origin.replace(/\/+$/,'');
                       let bases = [];
+                      try { if (window.FlutterConfig && window.FlutterConfig.backendUrl) { bases.push(String(window.FlutterConfig.backendUrl).replace(/\/+$/,'/')); } } catch(_) {}
                       try { if (window.GlobalConfig && window.GlobalConfig.baseUrl) { bases.push(String(window.GlobalConfig.baseUrl).replace(/\/+$/,'/')); } } catch(_) {}
                       bases.push(origin + '/api/');
                       bases.push(origin + '/api/web/');
@@ -1661,15 +1867,24 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
                       async function tryLogin(base){
                         try {
-                          const u = base + 'user/fblogin';
+                          // New backend uses 'user/facebook-auth', old uses 'user/fblogin'
+                          const isNewBackend = base.includes('.cloudfunctions.net');
+                          const endpoint = isNewBackend ? 'user/facebook-auth' : 'user/fblogin';
+                          const u = base + endpoint;
                           console.log('[NATIVE->WEB][FB] trying', u);
                           const r = await fetch(u, {
-                            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ access_token: accessToken, company_url: company, invite_code: '', legacy })
                           });
-                          const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
-                          if (!r.ok || ct.indexOf('application/json') < 0) { console.warn('[NATIVE->WEB][FB] http', r.status, 'at', u); return null; }
-                          return await r.json();
+                          console.log('[NATIVE->WEB][FB] http', r.status, 'at', u);
+                          if (!r.ok) { return null; }
+                          // Try to parse JSON even if content-type is missing/wrong
+                          try {
+                            return await r.json();
+                          } catch(parseErr) {
+                            console.error('[NATIVE->WEB][FB] JSON parse failed for', u, parseErr);
+                            return null;
+                          }
                         } catch(e) { console.error('[NATIVE->WEB][FB] fetch error at', base, e); return null; }
                       }
 
@@ -1798,11 +2013,52 @@ class _WebViewScreenState extends State<WebViewScreen> {
           ]),
           onWebViewCreated: (controller) async {
             _inAppController = controller;
+            // Get serverClientId from static mapping
+            // Priority:
+            // 1. googleAuthCompanyId from config (if explicitly set)
+            // 2. Flavor-based logic (for galeriaKazimierz - always use old project)
+            // 3. companyId from config (for other flavors)
+            String serverClientId;
+            String companyId = 'galeria-kazimierz'; // default fallback
+            String? googleAuthCompanyId; // Company ID specifically for Google Auth
+            
+            if (widget.config is SecureAppConfig) {
+              final secureConfig = widget.config as SecureAppConfig;
+              companyId = secureConfig.companyId; // Used for UI/WebView
+              googleAuthCompanyId = secureConfig.googleAuthCompanyId; // Used for Google Auth (optional)
+            }
+            
+            // Determine which companyId to use for Google Auth
+            // Priority:
+            // 1. googleAuthCompanyId from config (if explicitly set) - highest priority, always respected
+            // 2. Flavor-based fallback logic (if googleAuthCompanyId not set)
+            String authCompanyId;
+            if (googleAuthCompanyId != null) {
+              // Use explicit googleAuthCompanyId from config (always respected for all flavors)
+              authCompanyId = googleAuthCompanyId!;
+            } else if (FlavorConfig.isInitialized && 
+                (FlavorConfig.instance.flavor == FlavorType.galeriaKazimierz || 
+                 FlavorConfig.instance.flavor == FlavorType.galeriaKazimierzNew)) {
+              // For galeriaKazimierz and galeriaKazimierzNew flavors, default to old project's companyId
+              // This ensures Android OAuth Client (SHA-1) matches the configured google-services.json
+              authCompanyId = 'galeria-kazimierz';
+            } else {
+              // For other flavors without explicit googleAuthCompanyId, use companyId from config
+              authCompanyId = companyId;
+            }
+            
+            // Look up client ID from static mapping
+            serverClientId = _googleAuthClientIds[authCompanyId] ?? 
+                            _googleAuthClientIds['galeria-kazimierz']!; // fallback to default
+            
+            final flavorInfo = FlavorConfig.isInitialized ? FlavorConfig.instance.flavor.toString() : 'unknown';
+            debugPrint('[WEBVIEW] Flavor: $flavorInfo, Company (UI): $companyId, Company (Google Auth): $authCompanyId, Google Auth client: ${serverClientId.substring(0, 20)}...');
+            
             _googleSignIn = GoogleSignIn(
-              // Web client ID from current google-services.json (project 839029981684)
-              serverClientId: '839029981684-v8su4cmc72t498k2evmejnohi0pk7v3c.apps.googleusercontent.com',
+              serverClientId: serverClientId,
               scopes: ['email', 'profile'],
             );
+            debugPrint('[WEBVIEW] GoogleSignIn initialized');
             // Attempt an early guest token register using the company from URL
             try {
               final currentUrl = await _inAppController?.getUrl();
@@ -1901,15 +2157,15 @@ class _WebViewScreenState extends State<WebViewScreen> {
             _inAppController?.addJavaScriptHandler(
               handlerName: 'googleSignIn',
               callback: (args) async {
-                Future<Map<String, dynamic>> dispatchToWeb(String idToken, String accessToken, String serverAuthCode, String email, {bool fallback = false}) async {
-                  debugPrint('GoogleSignIn: idToken len=${idToken.length}, accessToken len=${accessToken.length}, serverAuthCode len=${serverAuthCode.length}, email=$email, fallback=$fallback');
+                Future<Map<String, dynamic>> dispatchToWeb(String idToken, String accessToken, String serverAuthCode, String email, String name, String id, String imageUrl, {bool fallback = false}) async {
+                  debugPrint('GoogleSignIn: idToken len=${idToken.length}, accessToken len=${accessToken.length}, serverAuthCode len=${serverAuthCode.length}, email=$email, name=$name, id=$id, fallback=$fallback');
                   await _inAppController?.evaluateJavascript(source: """
                     try {
                       window.dispatchEvent(new CustomEvent('flutter_google_tokens', {
-                        detail: { idToken: '${idToken.replaceAll("'", "\\'")}', accessToken: '${accessToken.replaceAll("'", "\\'")}', serverAuthCode: '${serverAuthCode.replaceAll("'", "\\'")}', email: '${email.replaceAll("'", "\\'")}', fallback: ${fallback ? 'true' : 'false'} }
+                        detail: { idToken: '${idToken.replaceAll("'", "\\'")}', accessToken: '${accessToken.replaceAll("'", "\\'")}', serverAuthCode: '${serverAuthCode.replaceAll("'", "\\'")}', email: '${email.replaceAll("'", "\\'")}', name: '${name.replaceAll("'", "\\'")}', id: '${id.replaceAll("'", "\\'")}', imageUrl: '${imageUrl.replaceAll("'", "\\'")}', fallback: ${fallback ? 'true' : 'false'} }
                       }));
                       if (window.onFlutterGoogleSignIn) {
-                        try { window.onFlutterGoogleSignIn({ idToken: '${idToken.replaceAll("'", "\\'")}', accessToken: '${accessToken.replaceAll("'", "\\'")}', serverAuthCode: '${serverAuthCode.replaceAll("'", "\\'")}', email: '${email.replaceAll("'", "\\'")}', fallback: ${fallback ? 'true' : 'false'} }); } catch(e) { console.error('onFlutterGoogleSignIn error', e); }
+                        try { window.onFlutterGoogleSignIn({ idToken: '${idToken.replaceAll("'", "\\'")}', accessToken: '${accessToken.replaceAll("'", "\\'")}', serverAuthCode: '${serverAuthCode.replaceAll("'", "\\'")}', email: '${email.replaceAll("'", "\\'")}', name: '${name.replaceAll("'", "\\'")}', id: '${id.replaceAll("'", "\\'")}', imageUrl: '${imageUrl.replaceAll("'", "\\'")}', fallback: ${fallback ? 'true' : 'false'} }); } catch(e) { console.error('onFlutterGoogleSignIn error', e); }
                       }
                     } catch (e) { console.error('Flutter -> Web tokens dispatch error', e); }
                   """);
@@ -1918,6 +2174,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     'accessToken': accessToken,
                     'serverAuthCode': serverAuthCode,
                     'email': email,
+                    'name': name,
+                    'id': id,
+                    'imageUrl': imageUrl,
                     'fallback': fallback,
                   };
                 }
@@ -1935,7 +2194,15 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     await Future.delayed(const Duration(milliseconds: 300));
                     auth = await account.authentication;
                   }
-                  return await dispatchToWeb(auth.idToken ?? '', auth.accessToken ?? '', account.serverAuthCode ?? '', account.email);
+                  return await dispatchToWeb(
+                    auth.idToken ?? '', 
+                    auth.accessToken ?? '', 
+                    account.serverAuthCode ?? '', 
+                    account.email, 
+                    account.displayName ?? '', 
+                    account.id, 
+                    account.photoUrl ?? ''
+                  );
                 } catch (e) {
                   final es = e.toString();
                   debugPrint('GoogleSignIn primary error: $es');
@@ -1951,7 +2218,16 @@ class _WebViewScreenState extends State<WebViewScreen> {
                         await Future.delayed(const Duration(milliseconds: 300));
                         auth = await account.authentication;
                       }
-                      return await dispatchToWeb(auth.idToken ?? '', auth.accessToken ?? '', account.serverAuthCode ?? '', account.email, fallback: true);
+                      return await dispatchToWeb(
+                        auth.idToken ?? '', 
+                        auth.accessToken ?? '', 
+                        account.serverAuthCode ?? '', 
+                        account.email, 
+                        account.displayName ?? '', 
+                        account.id, 
+                        account.photoUrl ?? '',
+                        fallback: true
+                      );
                     } catch (e2, st2) {
                       debugPrint('GoogleSignIn fallback error: $e2\n$st2');
                       return {'error': e2.toString(), 'code': 10};
@@ -2179,7 +2455,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                               var url = 'https://login.2take.it/api/web/user/google-login';
                               console.log('[NATIVE->WEB] direct login POST', url, 'company=', company, 'legacy=', legacy);
                               var resp = await fetch(url, {
-                                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ access_token: '%IDTOKEN%', company_url: company, invite_code: '', legacy: legacy })
                               });
                               var ct = (resp.headers && resp.headers.get && resp.headers.get('content-type')) || '';

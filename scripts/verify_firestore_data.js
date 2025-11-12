@@ -2,7 +2,7 @@
 /**
  * Verify Firestore Configuration Data
  * 
- * This script checks if the app_configs collection has the required data
+ * This script checks if the mobile_configs collection has the required data
  * for the Flutter app to fetch at startup.
  */
 
@@ -25,32 +25,33 @@ async function verifyData() {
     console.log('📍 Project: development-417611');
     console.log('📍 Database: skanuj-wygrywaj');
     console.log('📍 Collection: mobile_configs\n');
-    
+
     try {
         const configs = ['galeria-kazimierz', 'kazimierz-club-new'];
-        
+
         for (const configId of configs) {
             console.log(`\n${'='.repeat(60)}`);
             console.log(`Checking config: ${configId}`);
             console.log(`${'='.repeat(60)}`);
-            
+
             const docRef = db.collection('mobile_configs').doc(configId);
             const doc = await docRef.get();
-            
+
             if (!doc.exists) {
                 console.log(`❌ Document '${configId}' NOT FOUND!`);
                 continue;
             }
-            
+
             const data = doc.data();
             console.log('✅ Document found!');
             console.log('\n📄 Configuration:');
             console.log(`   Company ID: ${data.companyId}`);
             console.log(`   Webview URL: ${data.webviewUrl}`);
+            console.log(`   Backend URL: ${data.backendUrl || 'MISSING'}`);
             console.log(`   Is Legacy: ${data.isLegacy}`);
             console.log(`   Firebase Project: ${data.firebaseProject}`);
             console.log(`   Version: ${data.version}`);
-            
+
             // Check Firebase configs
             if (data.firebaseConfigAndroid) {
                 console.log('\n   Android Firebase Config:');
@@ -60,7 +61,7 @@ async function verifyData() {
             } else {
                 console.log('\n   ❌ Android Firebase Config: MISSING');
             }
-            
+
             if (data.firebaseConfigIOS) {
                 console.log('\n   iOS Firebase Config:');
                 console.log(`     ✓ API Key: ${data.firebaseConfigIOS.apiKey ? '***' + data.firebaseConfigIOS.apiKey.slice(-4) : 'MISSING'}`);
@@ -70,15 +71,15 @@ async function verifyData() {
                 console.log('\n   ❌ iOS Firebase Config: MISSING');
             }
         }
-        
+
         console.log(`\n${'='.repeat(60)}`);
         console.log('✅ SUCCESS: All configurations are present!');
         console.log(`${'='.repeat(60)}\n`);
         console.log('💡 Your Flutter app will be able to fetch these configs at startup.');
         console.log('   To test: Run your app on an Android or iOS device/emulator.\n');
-        
+
         process.exit(0);
-        
+
     } catch (error) {
         console.error('\n❌ ERROR:', error.message);
         console.error('\n💡 Troubleshooting:');

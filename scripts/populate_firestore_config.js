@@ -3,7 +3,7 @@
 /**
  * Firestore Configuration Population Script
  * 
- * This script populates the app_configs collection in Firestore
+ * This script populates the mobile_configs collection in Firestore
  * with the secure configuration for both flavors.
  * 
  * Prerequisites:
@@ -64,7 +64,9 @@ const configs = {
                 iosBundleId: 'it.2take.galeriakazimierz'
             }
         },
-        webviewUrl: 'https://login.2take.it/?company_name=galeria-kazimierz&legacy=true',
+        webviewUrl: 'https://login.2take.it?company_name=galeria-kazimierz&d=9e30d60cdabaa8c6859b7ee737cd943b23d727b3&legacy=true',
+        googleAuthCompanyId: 'galeria-kazimierz',
+        backendUrl: 'https://login.2take.it/',
         isLegacy: true,
         firebaseProject: 'galeria-kazimierz-827d4',
         version: 1
@@ -90,6 +92,8 @@ const configs = {
             }
         },
         webviewUrl: 'https://skanuj-staging.web.app?company_name=kazimierz-club-new',
+        backendUrl: 'https://europe-central2-development-417611.cloudfunctions.net/kanuj-wygrywaj-backend/',
+        googleAuthCompanyId: 'galeria-kazimierz',
         isLegacy: false,
         firebaseProject: 'development-417611',
         version: 1
@@ -107,6 +111,7 @@ async function populateConfigs() {
                 firebaseConfigAndroid: config.firebaseConfig.android,
                 firebaseConfigIOS: config.firebaseConfig.ios,
                 webviewUrl: config.webviewUrl,
+                backendUrl: config.backendUrl,
                 isLegacy: config.isLegacy,
                 firebaseProject: config.firebaseProject,
                 version: config.version
@@ -116,6 +121,7 @@ async function populateConfigs() {
             console.log(`✓ Created/Updated config for: ${companyId}`);
             console.log(`  - Company ID: ${companyId}`);
             console.log(`  - Firebase Project: ${config.firebaseProject}`);
+            console.log(`  - Backend URL: ${config.backendUrl}`);
             console.log(`  - Legacy Mode: ${config.isLegacy}`);
             console.log(`  - Android Config: ✓`);
             console.log(`  - iOS Config: ✓`);
@@ -142,4 +148,3 @@ populateConfigs()
         console.error('✗ Script failed:', error);
         process.exit(1);
     });
-

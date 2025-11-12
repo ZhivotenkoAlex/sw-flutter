@@ -11,42 +11,31 @@ import FirebaseMessaging
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
+    
+    // Set up notification center delegate
     if #available(iOS 10.0, *) {
       UNUserNotificationCenter.current().delegate = self as UNUserNotificationCenterDelegate
     }
     
-    // Note: Firebase will be initialized in Dart code after app launch
-    // We'll set the Messaging delegate later when Firebase is initialized
-    // This is handled in _setMessagingDelegateIfNeeded()
+    // Firebase is auto-initialized from GoogleService-Info.plist before app launch
+    // Set Messaging delegate
+    Messaging.messaging().delegate = self
     
+    // Register for remote notifications
     application.registerForRemoteNotifications()
+    
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
   
-  // Helper to set Messaging delegate when Firebase is initialized
-  private func _setMessagingDelegateIfNeeded() {
-    if FirebaseApp.app() != nil {
-      Messaging.messaging().delegate = self
-      print("[AppDelegate] Firebase Messaging delegate set")
-    }
-  }
-  
-  // Manually forward APNs token to Firebase Messaging (required with FirebaseAppDelegateProxyEnabled=false)
+  // Manually forward APNs token to Firebase Messaging
+  // (Required because FirebaseAppDelegateProxyEnabled=false in Info.plist)
   override func application(
     _ application: UIApplication,
     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
   ) {
-    // Set delegate if Firebase is initialized
-    _setMessagingDelegateIfNeeded()
-    
     // Forward APNs token to Firebase Messaging
-    if FirebaseApp.app() != nil {
-      Messaging.messaging().apnsToken = deviceToken
-      print("[AppDelegate] APNs token set to Firebase Messaging (project: \(FirebaseApp.app()!.options.projectId))")
-    } else {
-      print("[AppDelegate] Firebase not initialized yet, APNs token will be set later")
-      // Store token temporarily - Firebase Messaging will request it when initialized
-    }
+    Messaging.messaging().apnsToken = deviceToken
+    
     // Also call super to ensure Flutter plugins receive the token
     super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
   }

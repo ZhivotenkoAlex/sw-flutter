@@ -39,6 +39,7 @@ console.log('✓ Using Firestore database: skanuj-wygrywaj');
 // OLD CONFIGURATION (galeria-kazimierz legacy)
 const oldConfig = {
     companyId: 'galeria-kazimierz',
+    googleAuthCompanyId: 'galeria-kazimierz',
     firebaseConfigAndroid: {
         apiKey: 'AIzaSyA1BUbvKpPjTkgLxMOVwawaDW67_f-mhrY',
         appId: '1:839029981684:android:f1773609d3cb500e5e39a1',
@@ -57,6 +58,7 @@ const oldConfig = {
         iosBundleId: 'it.2take.galeriakazimierz'
     },
     webviewUrl: 'https://login.2take.it?company_name=galeria-kazimierz&d=9e30d60cdabaa8c6859b7ee737cd943b23d727b3&legacy=true',
+    backendUrl: 'https://login.2take.it/',
     isLegacy: true,
     firebaseProject: 'galeria-kazimierz-827d4',
     version: 3

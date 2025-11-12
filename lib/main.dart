@@ -104,17 +104,16 @@ void main() async {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     
     try {
-      // FirebaseMessagingService.initialize() will:
-      // 1. Check if default Firebase app matches config's project
-      // 2. If not, delete and re-initialize with config's Firebase options
-      // 3. This allows dynamic switching between Firebase projects
+      // Firebase Messaging uses the default Firebase app that's auto-initialized
+      // from native platform configs (google-services.json on Android,
+      // GoogleService-Info.plist on iOS). Each flavor has its own Firebase project
+      // configured statically in these files.
       print('[Main] Initializing Firebase Messaging with config project: ${config.firebaseProject}');
       
-      // Initialize Firebase Messaging Service (handles Firebase re-initialization)
+      // Initialize Firebase Messaging Service
+      // Note: config parameter is accepted for API compatibility but not used for
+      // Firebase initialization - native configs are used instead
       await FirebaseMessagingService.initialize(config: config);
-      
-      // Request permission (FirebaseMessagingService handles the messaging instance)
-      // Note: Permission is already requested in FirebaseMessagingService.initialize()
       
       // Configure API with hardcoded backend URL (same for all flavors)
       FirebaseMessagingService.configureApi(

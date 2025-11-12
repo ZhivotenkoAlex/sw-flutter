@@ -39,6 +39,7 @@ console.log('✓ Using Firestore database: skanuj-wygrywaj');
 // NEW CONFIGURATION (kazimierz-club-new)
 const newConfig = {
     companyId: 'kazimierz-club-new',
+    googleAuthCompanyId: 'galeria-kazimierz',
     firebaseConfigAndroid: {
         apiKey: 'AIzaSyClPTttdsqmbC68z9HxQsWehxcf0Vhb50M',
         appId: '1:159120615271:android:8e46a63c1ab6102f74f1c2',
@@ -57,6 +58,7 @@ const newConfig = {
         iosBundleId: 'com.skanujwygrywaj.skanujWygrywaj'
     },
     webviewUrl: 'https://skanuj-staging.web.app/?company_name=kazimierz-club-new',
+    backendUrl: 'https://europe-central2-development-417611.cloudfunctions.net/kanuj-wygrywaj-backend/',
     isLegacy: false,
     firebaseProject: 'development-417611',
     version: 2
@@ -65,7 +67,7 @@ const newConfig = {
 async function updateConfig() {
     console.log('\n🔄 Updating galeria-kazimierz to NEW app configuration...\n');
 
-    const documentId = 'kazimierz-club-new';
+    const documentId = 'galeria-kazimierz';
 
     try {
         // Show what we're about to change

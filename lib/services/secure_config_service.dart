@@ -11,7 +11,9 @@ class SecureAppConfig extends AppConfig {
   final Map<String, dynamic> firebaseConfigAndroid;
   final Map<String, dynamic> firebaseConfigIOS;
   final int version;
-  final String companyId; // Company ID for API calls and logic
+  final String companyId; // Company ID for API calls and logic (UI/WebView)
+  final String? googleAuthCompanyId; // Company ID for Google Authentication (optional, falls back to flavor-based logic)
+  final String backendUrl; // Backend URL for API calls
 
   SecureAppConfig({
     required super.webviewUrl,
@@ -22,6 +24,8 @@ class SecureAppConfig extends AppConfig {
     required this.firebaseConfigIOS,
     required this.version,
     required this.companyId,
+    this.googleAuthCompanyId,
+    required this.backendUrl,
   });
 
   factory SecureAppConfig.fromFirestore(DocumentSnapshot doc) {
@@ -33,6 +37,14 @@ class SecureAppConfig extends AppConfig {
     final companyId = data['companyId'] as String;
     print('[SecureConfig] Loaded companyId: $companyId');
 
+    final googleAuthCompanyId = data['googleAuthCompanyId'] as String?;
+    if (googleAuthCompanyId != null) {
+      print('[SecureConfig] Loaded googleAuthCompanyId: $googleAuthCompanyId');
+    }
+
+    final backendUrl = data['backendUrl'] as String;
+    print('[SecureConfig] Loaded backendUrl: $backendUrl');
+
     return SecureAppConfig(
       webviewUrl: data['webviewUrl'] as String,
       isLegacy: data['isLegacy'] as bool,
@@ -42,6 +54,8 @@ class SecureAppConfig extends AppConfig {
       firebaseConfigIOS: data['firebaseConfigIOS'] as Map<String, dynamic>,
       version: data['version'] as int? ?? 1,
       companyId: companyId,
+      googleAuthCompanyId: googleAuthCompanyId,
+      backendUrl: backendUrl,
     );
   }
 
@@ -55,6 +69,8 @@ class SecureAppConfig extends AppConfig {
       firebaseConfigIOS: json['firebaseConfigIOS'] as Map<String, dynamic>,
       version: json['version'] as int? ?? 1,
       companyId: json['companyId'] as String,
+      googleAuthCompanyId: json['googleAuthCompanyId'] as String?,
+      backendUrl: json['backendUrl'] as String,
     );
   }
 
@@ -65,6 +81,10 @@ class SecureAppConfig extends AppConfig {
     baseJson['firebaseConfigIOS'] = firebaseConfigIOS;
     baseJson['version'] = version;
     baseJson['companyId'] = companyId;
+    if (googleAuthCompanyId != null) {
+      baseJson['googleAuthCompanyId'] = googleAuthCompanyId;
+    }
+    baseJson['backendUrl'] = backendUrl;
     return baseJson;
   }
 
