@@ -624,8 +624,89 @@ service cloud.firestore {
 
 ---
 
+## Recent Updates
+
+### Firebase Messaging Architecture (Updated)
+
+**Current Implementation:**
+
+Firebase Messaging now uses a **simplified architecture** where:
+
+- ✅ **All flavors use the same Firebase project for Messaging** (`galeria-kazimierz-827d4`)
+- ✅ **Messaging is initialized from native configs** (`google-services.json` / `GoogleService-Info.plist`)
+- ✅ **No dynamic switching** - Messaging project is determined at build time
+- ✅ **Dynamic configs** (UI, WebView URL, `companyId`) still work via Firestore
+
+**Why This Change:**
+
+- Android requires rebuild for Messaging project changes anyway
+- Simplifies codebase and reduces complexity
+- Ensures consistent Messaging behavior across flavors
+- Eliminates potential initialization conflicts
+
+**Configuration:**
+
+Each flavor's `google-services.json` / `GoogleService-Info.plist` must point to the same Firebase project (`galeria-kazimierz-827d4`) for Messaging. Other configurations remain dynamic via Firestore.
+
+### Google Sign-In Configuration (Updated)
+
+**Current Implementation:**
+
+Google Sign-In uses a **static mapping** approach:
+
+- ✅ **Company-based mapping**: Each `companyId` maps to a specific Firebase project's Web Client ID
+- ✅ **Hardcoded in Dart**: Mapping is defined in `lib/webview_screen_mobile.dart`
+- ✅ **Priority system**: 
+  1. `googleAuthCompanyId` from Firestore config (if explicitly set)
+  2. Flavor-based fallback (e.g., `galeriaKazimierz` → `galeria-kazimierz`)
+  3. `companyId` from Firestore config
+
+**Configuration:**
+
+```dart
+// lib/webview_screen_mobile.dart
+const Map<String, String> _googleAuthClientIds = {
+  'galeria-kazimierz': '839029981684-v8su4cmc72t498k2evmejnohi0pk7v3c.apps.googleusercontent.com',
+  'kazimierz-club-new': '159120615271-s2fbutrvvgk39rq71fafmeadksmk4g4d.apps.googleusercontent.com',
+  // Add new companies here as needed
+};
+```
+
+**Why Static Mapping:**
+
+- Avoids SHA-1 fingerprint conflicts across Firebase projects
+- Ensures consistent Google Auth behavior
+- Simplifies configuration management
+- Allows different companies to use different Firebase projects for Google Auth
+
+**Adding New Companies:**
+
+1. Add entry to `_googleAuthClientIds` map in `lib/webview_screen_mobile.dart`
+2. Ensure Android OAuth Client exists in the target Firebase project with correct SHA-1 fingerprints
+3. Update `google-services.json` for the flavor with the Android OAuth Client
+4. (Optional) Set `googleAuthCompanyId` in Firestore config for explicit override
+
+**Platform-Specific Requirements:**
+
+- **Android**: Requires Android OAuth Client (`client_type: 1`) with SHA-1 fingerprints in `google-services.json`
+- **iOS**: Requires iOS OAuth Client (`client_type: 2`) with Bundle ID in Firebase project
+- **Web**: Uses Web OAuth Client (`client_type: 3`) for `serverClientId`
+
+### Testing FCM Tokens in Production
+
+A **secret gesture** mechanism allows testers to view FCM tokens in production builds:
+
+- **Gesture**: 7 rapid taps in top-left corner (100x100 pixels)
+- **Timeout**: 1 second between taps
+- **Result**: Dialog showing FCM token with copy functionality
+
+See [FCM Token Testing Guide](FCM_TOKEN_TESTING.md) for detailed instructions.
+
+---
+
 For more information:
 
 - [README.md](../README.md) - Project overview
 - [FLAVORS_GUIDE.md](FLAVORS_GUIDE.md) - Flavor setup guide
+- [FCM_TOKEN_TESTING.md](FCM_TOKEN_TESTING.md) - FCM token testing in production
 - [Firebase Console](https://console.firebase.google.com/)

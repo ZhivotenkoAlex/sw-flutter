@@ -44,6 +44,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   String? _pendingImageDataUrl; // pull-based bridge buffer
   bool _isPicking = false; // prevent duplicate pickers
+  
+  // Secret gesture for FCM token access
+  int _secretTapCount = 0;
+  DateTime? _lastTapTime;
+  static const int _secretTapThreshold = 7;
+  static const Duration _secretTapTimeout = Duration(seconds: 1);
 
   String _generateNonce([int length = 32]) {
     const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
@@ -703,6 +709,88 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
   }
 
+  void _handleSecretTap(Offset globalPosition, BuildContext context) {
+    // Convert global position to local position relative to Scaffold
+    final RenderBox? box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    
+    final localPosition = box.globalToLocal(globalPosition);
+    
+    // Check if tap is in top-left corner (100x100 pixels)
+    if (localPosition.dx > 100 || localPosition.dy > 100) {
+      _secretTapCount = 0;
+      _lastTapTime = null;
+      return;
+    }
+    
+    final now = DateTime.now();
+    
+    // Reset if too much time passed since last tap
+    if (_lastTapTime != null && now.difference(_lastTapTime!) > _secretTapTimeout) {
+      _secretTapCount = 0;
+    }
+    
+    _secretTapCount++;
+    _lastTapTime = now;
+    
+    debugPrint('[SECRET] Tap count: $_secretTapCount/$_secretTapThreshold at (${localPosition.dx}, ${localPosition.dy})');
+    
+    if (_secretTapCount >= _secretTapThreshold) {
+      _secretTapCount = 0;
+      _lastTapTime = null;
+      _showFcmTokenDialog(context);
+    }
+  }
+  
+  void _showFcmTokenDialog(BuildContext context) {
+    final token = FirebaseMessagingService.fcmToken;
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('FCM Token'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (token != null) ...[
+                  Text(
+                    'Token length: ${token.length}',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    token,
+                    style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                  ),
+                ] else
+                  const Text('Token not available yet'),
+              ],
+            ),
+          ),
+          actions: [
+            if (token != null)
+              TextButton(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: token));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Token copied to clipboard')),
+                  );
+                },
+                child: const Text('Copy'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final initialUrl = widget.config.webviewUrl;
@@ -717,42 +805,48 @@ class _WebViewScreenState extends State<WebViewScreen> {
     print('[WebViewScreen] Loading $modeLabel mode, URL: $initialUrl');
     
     return Scaffold(
-      body: Column(
-        children: [
-          // Mode indicator (shown only in debug mode)
-          if (kDebugMode)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-              color: modeColor.withOpacity(0.9),
-              child: SafeArea(
-                bottom: false,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      isLegacyMode ? Icons.history : Icons.rocket_launch,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '$modeLabel Mode',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
+      body: GestureDetector(
+        onTapDown: (TapDownDetails details) {
+          _handleSecretTap(details.globalPosition, context);
+        },
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                // Mode indicator (shown only in debug mode)
+                if (kDebugMode)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    color: modeColor.withOpacity(0.9),
+                    child: SafeArea(
+                      bottom: false,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            isLegacyMode ? Icons.history : Icons.rocket_launch,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '$modeLabel Mode',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-          // WebView
-          Expanded(
-            child: SafeArea(
-              top: !kDebugMode, // If not debug, add top SafeArea
-        child: InAppWebView(
+                  ),
+                // WebView
+                Expanded(
+                  child: SafeArea(
+                    top: !kDebugMode, // If not debug, add top SafeArea
+                    child: InAppWebView(
           initialUrlRequest: URLRequest(url: WebUri(initialUrl)),
           initialSettings: InAppWebViewSettings(
             javaScriptEnabled: true,
@@ -2575,10 +2669,26 @@ class _WebViewScreenState extends State<WebViewScreen> {
             return JsPromptResponse(handledByClient: false);
           },
         ),
-              ), // SafeArea
-            ), // Expanded
-          ], // children of Column
-        ), // Column (body of Scaffold)
+                    ), // SafeArea
+                  ), // Expanded
+                ], // children of Column
+              ), // Column
+              // Invisible tap area for secret gesture (top-left corner)
+              // IgnorePointer allows taps to pass through to WebView below
+              Positioned(
+                top: 0,
+                left: 0,
+                child: IgnorePointer(
+                  child: Container(
+                    width: 100,
+                    height: 100,
+                    color: Colors.transparent,
+                  ),
+                ),
+              ),
+            ], // children of Stack
+          ), // Stack
+        ), // GestureDetector
       // floatingActionButton: kDebugMode ? FloatingActionButton.small(
       //   onPressed: _setCustomUrlDialog,
       //   child: const Icon(Icons.link),
