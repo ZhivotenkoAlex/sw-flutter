@@ -699,7 +699,7 @@ const Map<String, String> _googleAuthClientIds = {
 
 A **secret gesture** mechanism allows testers to view FCM tokens in production builds:
 
-- **Gesture**: 7 rapid taps in top-left corner (100x100 pixels)
+- **Gesture**: 7 rapid taps in top-right corner (100x100 pixels)
 - **Timeout**: 1 second between taps
 - **Result**: Dialog showing FCM token with copy functionality
 

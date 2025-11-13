@@ -10,26 +10,18 @@ In production builds, console logs are not accessible, making it difficult to re
 
 ### How to Access
 
-1. **Locate the secret tap area**: Top-left corner of the screen (100x100 pixels)
-2. **Perform the gesture**: Tap 7 times rapidly in the top-left corner
+1. **Locate the secret tap area**: Top-right corner of the screen (100x100 pixels)
+2. **Perform the gesture**: Tap 7 times rapidly in the top-right corner
    - **Important**: The time between each consecutive tap must be **less than 1 second**
    - If more than 1 second passes between any two taps, the counter resets to 0
    - Example: Tap 1 → wait up to 1s → Tap 2 → wait up to 1s → Tap 3 → ... → Tap 7
 3. **View the token**: A dialog will appear displaying the FCM token
 
-**Visual Reference:**
-
-![Secret tap area location](flutter_01.png)
-_Figure 1: The secret tap area is located in the top-left corner (shown with temporary green indicator for testing)_
-
-![Secret tap area on main screen](flutter_02.png)
-_Figure 2: The secret tap area remains accessible from any screen in the app_
-
 ### Gesture Details
 
 | Parameter            | Value                                         |
 | -------------------- | --------------------------------------------- |
-| **Location**         | Top-left corner (0, 0) to (100, 100) pixels   |
+| **Location**         | Top-right corner (within 100 pixels from right edge, 100 pixels from top) |
 | **Required taps**    | 7 consecutive taps                            |
 | **Timeout**          | Maximum 1 second between each consecutive tap |
 | **Visual indicator** | None (invisible area)                         |
@@ -49,11 +41,6 @@ When the secret gesture is successfully performed, a dialog appears with:
 - **Full token**: Selectable text displaying the complete token
 - **Copy button**: Copies the token to clipboard for easy sharing
 - **Close button**: Dismisses the dialog
-
-**Visual Reference:**
-
-![FCM Token Dialog](flutter_03.png)
-_Figure 3: The FCM token dialog displaying the full token with copy functionality_
 
 ### Copying the Token
 
@@ -78,7 +65,7 @@ The secret gesture handler is implemented in:
 int _secretTapCount = 0;
 DateTime? _lastTapTime;
 static const int _secretTapThreshold = 7;
-static const Duration _secretTapTimeout = Duration(seconds: 2);
+static const Duration _secretTapTimeout = Duration(seconds: 1);
 
 // Gesture detection
 GestureDetector(
@@ -108,11 +95,10 @@ This token is automatically refreshed by Firebase when:
 ### Step 1: Obtain Token
 
 1. Launch the production build on a physical device
-2. Perform the secret gesture (7 taps in top-left corner)
-   - See [Figure 1](flutter_01.png) and [Figure 2](flutter_02.png) for visual reference
+2. Perform the secret gesture (7 taps in top-right corner)
    - **Note**: Taps must be within 1 second of each other
+   - Tap area is within 100 pixels from the right edge and 100 pixels from the top
 3. Copy the token from the dialog
-   - See [Figure 3](flutter_03.png) for the dialog appearance
 
 ### Step 2: Send Test Notification
 
@@ -156,13 +142,13 @@ curl -X POST https://fcm.googleapis.com/v1/projects/YOUR_PROJECT_ID/messages:sen
 
 **Possible causes:**
 
-1. **Tap area incorrect**: Ensure taps are in the exact top-left corner (first 100x100 pixels)
+1. **Tap area incorrect**: Ensure taps are in the exact top-right corner (within 100 pixels from right edge, 100 pixels from top)
 2. **Timing too slow**: The time between each consecutive tap must be less than 1 second
 3. **Counter reset**: If more than 1 second passes between any two taps, counter resets to 0
 
 **Solution:**
 
-- Tap rapidly and consistently in the top-left corner
+- Tap rapidly and consistently in the top-right corner
 - Count taps mentally: 1, 2, 3, 4, 5, 6, 7
 - If dialog doesn't appear, start over
 

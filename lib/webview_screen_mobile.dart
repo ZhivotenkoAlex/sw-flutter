@@ -715,14 +715,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
     if (box == null) return;
     
     final localPosition = box.globalToLocal(globalPosition);
+    final screenWidth = box.size.width;
     
-    // Account for SafeArea offset in release mode
-    final safeAreaTop = MediaQuery.of(context).padding.top;
-    final adjustedY = localPosition.dy - safeAreaTop;
-    
-    // Check if tap is in top-left corner (100x100 pixels)
-    // In release mode, SafeArea adds padding, so we need to account for it
-    if (localPosition.dx > 100 || adjustedY > 100 || adjustedY < 0) {
+    // Check if tap is in absolute top-right corner (100x100 pixels from top-right of Scaffold)
+    // This works regardless of SafeArea - we check absolute position
+    final distanceFromRight = screenWidth - localPosition.dx;
+    if (distanceFromRight > 100 || localPosition.dy > 100) {
       _secretTapCount = 0;
       _lastTapTime = null;
       return;
@@ -739,7 +737,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
     _lastTapTime = now;
     
     // Log in release mode too (using print instead of debugPrint)
-    print('[SECRET] Tap count: $_secretTapCount/$_secretTapThreshold at (${localPosition.dx}, ${adjustedY})');
+    print('[SECRET] Tap count: $_secretTapCount/$_secretTapThreshold at (${localPosition.dx}, ${localPosition.dy})');
     
     if (_secretTapCount >= _secretTapThreshold) {
       _secretTapCount = 0;
@@ -2679,11 +2677,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   ), // Expanded
                 ], // children of Column
               ), // Column
-              // Invisible tap area for secret gesture (top-left corner)
+              // Invisible tap area for secret gesture (top-right corner)
               // GestureDetector on Scaffold body handles taps, this is just a visual marker
               Positioned(
                 top: 0,
-                left: 0,
+                right: 0,
                 child: Container(
                   width: 100,
                   height: 100,
