@@ -58,8 +58,6 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Camera access is needed to scan codes and take photos.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Microphone access is needed for video capture.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Photo library access is needed to pick images.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
