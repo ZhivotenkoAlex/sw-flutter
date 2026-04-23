@@ -15,6 +15,25 @@ import 'package:flutter/services.dart';
 import 'app_config.dart';
 import 'services/secure_config_service.dart';
 import 'flavor_config.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+Future<NavigationActionPolicy> _navigationPolicyForExternalSchemes(String url) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null || !uri.hasScheme) return NavigationActionPolicy.ALLOW;
+  switch (uri.scheme.toLowerCase()) {
+    case 'tel':
+    case 'mailto':
+    case 'sms':
+    case 'smsto':
+    case 'geo':
+      try {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (_) {}
+      return NavigationActionPolicy.CANCEL;
+    default:
+      return NavigationActionPolicy.ALLOW;
+  }
+}
 
 /// Static mapping of companyId to Google Sign-In Web Client ID
 /// Each company has its own Firebase project for Google Authentication
@@ -2435,8 +2454,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
           onLoadError: (controller, url, code, message) {},
           shouldOverrideUrlLoading: (controller, navAction) async {
             final url = navAction.request.url?.toString() ?? '';
+            final externalPolicy = await _navigationPolicyForExternalSchemes(url);
+            if (externalPolicy == NavigationActionPolicy.CANCEL) {
+              return NavigationActionPolicy.CANCEL;
+            }
             if (url.contains('accounts.google.com') || url.contains('oauth2') || url.contains('gsi/client')) {
-              
               return NavigationActionPolicy.ALLOW;
             }
             return NavigationActionPolicy.ALLOW;
