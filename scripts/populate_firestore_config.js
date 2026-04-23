@@ -127,6 +127,93 @@ const configs = {
         isLegacy: false,
         firebaseProject: 'development-417611',
         version: 1
+    },
+    'polbau-demo': {
+        firebaseConfig: {
+            android: {
+                // TODO: Replace with actual values from google-services.json
+                apiKey: 'YOUR_ANDROID_API_KEY',
+                appId: 'YOUR_ANDROID_APP_ID',
+                messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
+                projectId: 'YOUR_PROJECT_ID',
+                storageBucket: 'YOUR_STORAGE_BUCKET',
+                databaseURL: 'YOUR_DATABASE_URL'
+            },
+            ios: {
+                // TODO: Replace with actual values from GoogleService-Info.plist
+                apiKey: 'YOUR_IOS_API_KEY',
+                appId: 'YOUR_IOS_APP_ID',
+                messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
+                projectId: 'YOUR_PROJECT_ID',
+                storageBucket: 'YOUR_STORAGE_BUCKET',
+                databaseURL: 'YOUR_DATABASE_URL',
+                iosBundleId: 'com.polbau.polbau_demo'
+            }
+        },
+        webviewUrl: 'https://YOUR_WEBVIEW_URL?company_name=polbau-demo',
+        backendUrl: 'https://YOUR_BACKEND_URL/',
+        googleAuthCompanyId: 'polbau-demo',
+        isLegacy: false,
+        firebaseProject: 'YOUR_FIREBASE_PROJECT_ID',
+        version: 1
+    },
+    'wislanka': {
+        firebaseConfig: {
+            android: {
+                // TODO: Replace with actual values from google-services.json
+                apiKey: 'YOUR_ANDROID_API_KEY',
+                appId: 'YOUR_ANDROID_APP_ID',
+                messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
+                projectId: 'YOUR_PROJECT_ID',
+                storageBucket: 'YOUR_STORAGE_BUCKET',
+                databaseURL: 'YOUR_DATABASE_URL'
+            },
+            ios: {
+                // TODO: Replace with actual values from GoogleService-Info.plist
+                apiKey: 'YOUR_IOS_API_KEY',
+                appId: 'YOUR_IOS_APP_ID',
+                messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
+                projectId: 'YOUR_PROJECT_ID',
+                storageBucket: 'YOUR_STORAGE_BUCKET',
+                databaseURL: 'YOUR_DATABASE_URL',
+                iosBundleId: 'com.wislanka.wislanka'
+            }
+        },
+        webviewUrl: 'https://YOUR_WEBVIEW_URL?company_name=wislanka',
+        backendUrl: 'https://YOUR_BACKEND_URL/',
+        googleAuthCompanyId: 'wislanka',
+        isLegacy: false,
+        firebaseProject: 'YOUR_FIREBASE_PROJECT_ID',
+        version: 1
+    },
+    'stary-browar': {
+        firebaseConfig: {
+            android: {
+                // TODO: Replace with actual values from google-services.json
+                apiKey: 'YOUR_ANDROID_API_KEY',
+                appId: 'YOUR_ANDROID_APP_ID',
+                messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
+                projectId: 'YOUR_PROJECT_ID',
+                storageBucket: 'YOUR_STORAGE_BUCKET',
+                databaseURL: 'YOUR_DATABASE_URL'
+            },
+            ios: {
+                // TODO: Replace with actual values from GoogleService-Info.plist
+                apiKey: 'YOUR_IOS_API_KEY',
+                appId: 'YOUR_IOS_APP_ID',
+                messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
+                projectId: 'YOUR_PROJECT_ID',
+                storageBucket: 'YOUR_STORAGE_BUCKET',
+                databaseURL: 'YOUR_DATABASE_URL',
+                iosBundleId: 'com.starybrowar.staryBrowar'
+            }
+        },
+        webviewUrl: 'https://YOUR_WEBVIEW_URL?company_name=stary-browar',
+        backendUrl: 'https://YOUR_BACKEND_URL/',
+        googleAuthCompanyId: 'stary-browar',
+        isLegacy: false,
+        firebaseProject: 'YOUR_FIREBASE_PROJECT_ID',
+        version: 1
     }
 };
 

@@ -61,6 +61,27 @@ android {
             resValue("string", "app_name", "Galeria Kazimierz New")
             buildConfigField("String", "FLAVOR_NAME", "\"skanujNew\"")
         }
+
+        create("polbauDemo"){
+            dimension = "company"
+            applicationId = "com.polbau.polbau_demo"
+            resValue("string", "app_name", "Moja Galeria")
+            buildConfigField("String", "FLAVOR_NAME", "\"polbauDemo\"")
+        }
+
+        create("wislanka"){
+            dimension = "company"
+            applicationId = "com.wislanka.wislanka"
+            resValue("string", "app_name", "Wislanka")
+            buildConfigField("String", "FLAVOR_NAME", "\"wislanka\"")
+        }
+
+        create("staryBrowar"){
+            dimension = "company"
+            applicationId = "com.starybrowar.stary_browar"
+            resValue("string", "app_name", "Stary Browar")
+            buildConfigField("String", "FLAVOR_NAME", "\"staryBrowar\"")
+        }
     }
 
     buildTypes {

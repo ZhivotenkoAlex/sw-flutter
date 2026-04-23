@@ -1,6 +1,9 @@
 enum FlavorType {
   galeriaKazimierz,
   galeriaKazimierzNew,
+  polbauDemo,
+  wislanka,
+  staryBrowar,
 }
 
 class FlavorConfig {
@@ -66,6 +69,16 @@ class FlavorConfig {
       case 'galeria-kazimierz-new':
       case 'kazimierz-club-new':
         return FlavorType.galeriaKazimierzNew;
+      case 'polbaudemo':
+      case 'polbau_demo':
+      case 'polbau-demo':
+        return FlavorType.polbauDemo;
+      case 'wislanka':
+        return FlavorType.wislanka;
+      case 'starybrowar':
+      case 'stary_browar':
+      case 'stary-browar':
+        return FlavorType.staryBrowar;
       default:
         return null;
     }
@@ -87,6 +100,30 @@ class FlavorConfig {
           name: 'Galeria Kazimierz New',
           packageId: 'com.skanujwygrywaj.skanuj_wygrywaj',
           companyId: 'kazimierz-club-new',
+        );
+
+      case FlavorType.polbauDemo:
+        return FlavorConfig(
+          flavor: FlavorType.polbauDemo,
+          name: 'Moja Galeria',
+          packageId: 'com.polbau.polbau_demo',
+          companyId: 'polbau-demo',
+        );
+
+      case FlavorType.wislanka:
+        return FlavorConfig(
+          flavor: FlavorType.wislanka,
+          name: 'Wislanka',
+          packageId: 'com.wislanka.wislanka',
+          companyId: 'wislanka',
+        );
+
+      case FlavorType.staryBrowar:
+        return FlavorConfig(
+          flavor: FlavorType.staryBrowar,
+          name: 'Stary Browar',
+          packageId: 'com.starybrowar.stary_browar',
+          companyId: 'stary-browar',
         );
     }
   }

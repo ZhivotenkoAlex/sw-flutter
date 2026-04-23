@@ -1,0 +1,99 @@
+{
+  "project_info": {
+    "project_number": "839029981684",
+    "firebase_url": "https://galeria-kazimierz-827d4.firebaseio.com",
+    "project_id": "galeria-kazimierz-827d4",
+    "storage_bucket": "galeria-kazimierz-827d4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:839029981684:android:f1773609d3cb500e5e39a1",
+        "android_client_info": {
+          "package_name": "pl.a2ti.galeriakazimierz"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "839029981684-5gulluphlrs1pkgdnomleo0cbrfc3vqf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "pl.a2ti.galeriakazimierz",
+            "certificate_hash": "0c9545ed50c7e2f215f7bdbebc97d30ae2305539"
+          }
+        },
+        {
+          "client_id": "839029981684-6ovi8bjt7erquetfbh75jfh5254s8lus.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "pl.a2ti.galeriakazimierz",
+            "certificate_hash": "5373da677d2565031ca29d31fa407c42ddf402a8"
+          }
+        },
+        {
+          "client_id": "839029981684-8fua3da0f1jn0or0gp6c4pqsaua8pnb8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "pl.a2ti.galeriakazimierz",
+            "certificate_hash": "52e33b57ed7f464c2d3cc297c098ce6e458f4577"
+          }
+        },
+        {
+          "client_id": "839029981684-u5vgipegdqa6crmk3hcv3huiql4sef0e.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "pl.a2ti.galeriakazimierz",
+            "certificate_hash": "e1dc48e7ec83ec6a0bbaf68123f06bc338956786"
+          }
+        },
+        {
+          "client_id": "839029981684-v8su4cmc72t498k2evmejnohi0pk7v3c.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA1BUbvKpPjTkgLxMOVwawaDW67_f-mhrY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "839029981684-tso3q68735k2caumipib9oubkqb50f3g.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "839029981684-kq8kc6rt5kkfqbameeui336gg5mipn55.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "it.2take.galeriakazimierz"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:839029981684:android:PLACEHOLDER_REPLACE_WITH_REAL_APP_ID",
+        "android_client_info": {
+          "package_name": "com.starybrowar.stary_browar"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "839029981684-v8su4cmc72t498k2evmejnohi0pk7v3c.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA1BUbvKpPjTkgLxMOVwawaDW67_f-mhrY"
+        }
+      ]
+    }
+  ],
+  "configuration_version": "1"
+}
+
