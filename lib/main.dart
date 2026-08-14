@@ -10,6 +10,7 @@ import 'config_service.dart';
 import 'services/secure_config_service.dart';
 import 'firebase_config_loader.dart';
 import 'flavor_config.dart';
+import 'mall_selector_screen.dart';
 
 // Helper function to load messaging app options in background handler
 Future<FirebaseOptions?> _loadMessagingAppOptionsFromPrefs() async {
@@ -123,6 +124,13 @@ void main() async {
   }
 }
 
+Widget _buildHomeScreen(SecureAppConfig config) {
+  if (config.showSeletorPage && config.selectorItems.isNotEmpty) {
+    return MallSelectorScreen(config: config);
+  }
+  return WebViewScreen(config: config);
+}
+
 class MyApp extends StatelessWidget {
   final SecureAppConfig? config;
   
@@ -162,8 +170,8 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: isLegacyMode ? 'Skanuj Wygrywaj' : 'Skanuj Wygrywaj New',
       theme: appTheme,
-      home: config != null 
-        ? WebViewScreen(config: config!)
+      home: config != null
+        ? _buildHomeScreen(config!)
         : const Scaffold(
             body: Center(
               child: Column(

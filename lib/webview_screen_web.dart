@@ -7,19 +7,21 @@ import 'app_config.dart';
 // View factory will be registered dynamically per config
 class WebViewScreen extends StatelessWidget {
   final AppConfig config;
-  
-  const WebViewScreen({super.key, required this.config});
-  
+  final String? initialUrl;
+
+  const WebViewScreen({super.key, required this.config, this.initialUrl});
+
   @override
   Widget build(BuildContext context) {
+    final url = initialUrl ?? config.webviewUrl;
     // Register iframe with dynamic URL
-    _registerIFrameViewFactory(config.webviewUrl);
-    
+    _registerIFrameViewFactory(url);
+
     return Scaffold(
-      body: HtmlElementView(viewType: 'iframeElement_${config.webviewUrl.hashCode}'),
+      body: HtmlElementView(viewType: 'iframeElement_${url.hashCode}'),
     );
   }
-  
+
   void _registerIFrameViewFactory(String url) {
     final viewType = 'iframeElement_${url.hashCode}';
     

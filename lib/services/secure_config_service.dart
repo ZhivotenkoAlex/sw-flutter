@@ -5,6 +5,7 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../app_config.dart';
+import '../models/selector_item.dart';
 
 /// Secure configuration loaded from Firestore
 class SecureAppConfig extends AppConfig {
@@ -14,6 +15,8 @@ class SecureAppConfig extends AppConfig {
   final String companyId; // Company ID for API calls and logic (UI/WebView)
   final String? googleAuthCompanyId; // Company ID for Google Authentication (optional, falls back to flavor-based logic)
   final String backendUrl; // Backend URL for API calls
+  final bool showSeletorPage;
+  final List<SelectorItem> selectorItems;
 
   SecureAppConfig({
     required super.webviewUrl,
@@ -26,6 +29,8 @@ class SecureAppConfig extends AppConfig {
     required this.companyId,
     this.googleAuthCompanyId,
     required this.backendUrl,
+    this.showSeletorPage = false,
+    this.selectorItems = const [],
   });
 
   factory SecureAppConfig.fromFirestore(DocumentSnapshot doc) {
@@ -46,6 +51,8 @@ class SecureAppConfig extends AppConfig {
       companyId: companyId,
       googleAuthCompanyId: googleAuthCompanyId,
       backendUrl: backendUrl,
+      showSeletorPage: data['showSeletorPage'] as bool? ?? false,
+      selectorItems: _parseSelectorItems(data['selectorItems']),
     );
   }
 
@@ -61,7 +68,18 @@ class SecureAppConfig extends AppConfig {
       companyId: json['companyId'] as String,
       googleAuthCompanyId: json['googleAuthCompanyId'] as String?,
       backendUrl: json['backendUrl'] as String,
+      showSeletorPage: json['showSeletorPage'] as bool? ?? false,
+      selectorItems: _parseSelectorItems(json['selectorItems']),
     );
+  }
+
+  static List<SelectorItem> _parseSelectorItems(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((item) => SelectorItem.fromMap(Map<String, dynamic>.from(item)))
+        .where((item) => item.redirectionUrl.isNotEmpty)
+        .toList();
   }
 
   @override
@@ -75,6 +93,8 @@ class SecureAppConfig extends AppConfig {
       baseJson['googleAuthCompanyId'] = googleAuthCompanyId;
     }
     baseJson['backendUrl'] = backendUrl;
+    baseJson['showSeletorPage'] = showSeletorPage;
+    baseJson['selectorItems'] = selectorItems.map((item) => item.toJson()).toList();
     return baseJson;
   }
 

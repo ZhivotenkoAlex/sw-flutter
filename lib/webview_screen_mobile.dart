@@ -45,8 +45,9 @@ const Map<String, String> _googleAuthClientIds = {
 
 class WebViewScreen extends StatefulWidget {
   final AppConfig config;
-  
-  const WebViewScreen({super.key, required this.config});
+  final String? initialUrl;
+
+  const WebViewScreen({super.key, required this.config, this.initialUrl});
 
   @override
   State<WebViewScreen> createState() => _WebViewScreenState();
@@ -816,7 +817,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final initialUrl = widget.config.webviewUrl;
+    final initialUrl = widget.initialUrl ?? widget.config.webviewUrl;
     
     // Determine mode from configuration
     final bool isLegacyMode = widget.config is SecureAppConfig 
