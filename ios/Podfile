@@ -9,6 +9,15 @@ project 'Runner', {
   'Debug' => :debug,
   'Profile' => :release,
   'Release' => :release,
+  'Debug-galeriaKazimierz' => :debug,
+  'Profile-galeriaKazimierz' => :release,
+  'Release-galeriaKazimierz' => :release,
+  'Debug-galeriaKazimierzNew' => :debug,
+  'Profile-galeriaKazimierzNew' => :release,
+  'Release-galeriaKazimierzNew' => :release,
+  'Debug-polbauDemo' => :debug,
+  'Profile-polbauDemo' => :release,
+  'Release-polbauDemo' => :release,
 }
 
 def flutter_root
