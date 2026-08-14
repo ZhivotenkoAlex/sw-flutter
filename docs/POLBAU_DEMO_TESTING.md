@@ -1,4 +1,4 @@
-# polbau-demo — запуск и чеклист тестирования
+# polbau-demo — Run & Testing Checklist
 
 Flavor: `polbauDemo`  
 Firestore doc: `mobile_configs/polbau-demo`  
@@ -7,59 +7,59 @@ Bundle ID (iOS): `com.polbau.polbau_demo`
 
 ---
 
-## Предварительные условия
+## Prerequisites
 
-- [ ] Flutter SDK установлен (`flutter doctor` без критичных ошибок)
-- [ ] Firestore doc `polbau-demo` содержит:
+- [ ] Flutter SDK installed (`flutter doctor` with no critical errors)
+- [ ] Firestore doc `polbau-demo` contains:
   - `showSeletorPage: true`
-  - `selectorItems` (минимум 1 элемент с `name`, `image`, `logo`, `redirection_url`)
+  - `selectorItems` (at least 1 item with `name`, `image`, `logo`, `redirection_url`)
   - `webviewUrl`, `backendUrl`, `companyId`, `version`
-- [ ] Доступ к Firebase project `development-417611`, database `skanuj-wygrywaj`
-- [ ] Для iOS: Xcode + CocoaPods (`pod install` в `ios/`)
+- [ ] Access to Firebase project `development-417611`, database `skanuj-wygrywaj`
+- [ ] For iOS: Xcode + CocoaPods (`pod install` in `ios/`)
 
 ---
 
-## Как запустить
+## How to Run
 
-### Android (эмулятор или девайс)
+### Android (emulator or device)
 
 ```bash
-# Список устройств
+# List devices
 flutter devices
 
-# Запуск
+# Run
 flutter run --flavor polbauDemo --dart-define=FLAVOR=polbauDemo
 
-# Или через скрипт
+# Or via script
 ./run_flavor.sh polbauDemo android
 ```
 
-Если конфликт package с другим flavor — скрипт `run_flavor.sh` удалит старые APK.
+If there is a package conflict with another flavor, `run_flavor.sh` will uninstall old APKs.
 
-### iOS (симулятор)
+### iOS (simulator)
 
 ```bash
 flutter devices
 
 flutter run --flavor polbauDemo --dart-define=FLAVOR=polbauDemo
 
-# Или
+# Or
 ./run_flavor.sh polbauDemo ios
 ```
 
-Первый запуск может занять несколько минут (pod install + Xcode build).
+The first run may take several minutes (pod install + Xcode build).
 
-### Debug с принудительным обновлением конфига
+### Debug with forced config refresh
 
-В debug режиме конфиг рефрешится из Firestore:
+In debug mode, config is refreshed from Firestore:
 
 ```bash
 flutter run --flavor polbauDemo --dart-define=FLAVOR=polbauDemo
 ```
 
-Для очистки кеша конфига — переустановить приложение или удалить данные app.
+To clear the config cache — reinstall the app or clear app data.
 
-### Release-сборка (smoke test)
+### Release build (smoke test)
 
 ```bash
 # Android
@@ -71,43 +71,43 @@ flutter build ios --flavor polbauDemo --dart-define=FLAVOR=polbauDemo --simulato
 
 ---
 
-## Чеклист: Mall Selector
+## Checklist: Mall Selector
 
-### Общее
+### General
 
-- [ ] Приложение стартует без crash
-- [ ] В логах: `[CompanyMapping] Using company ID from flavor: polbau-demo` (или из Firestore)
-- [ ] Показывается экран **«Wybierz swoje / Centrum handlowe»**
-- [ ] Отображаются все карточки из `selectorItems`
-- [ ] У каждой карточки: фон, лого, название (uppercase)
-- [ ] Placeholder/error при недоступных картинках — карточка не ломается
+- [ ] App starts without crash
+- [ ] Logs show: `[CompanyMapping] Using company ID from flavor: polbau-demo` (or from Firestore)
+- [ ] Screen **"Wybierz swoje / Centrum handlowe"** is displayed
+- [ ] All cards from `selectorItems` are shown
+- [ ] Each card has: background image, logo, name (uppercase)
+- [ ] Placeholder/error when images fail to load — card layout stays intact
 
 ### Android
 
-- [ ] Status bar: светлые иконки на тёмном фоне
-- [ ] Safe area: контент не под status bar / gesture nav
-- [ ] Ripple при тапе на карточку
-- [ ] Hardware **Back** на селекторе → выход из приложения
+- [ ] Status bar: light icons on dark background
+- [ ] Safe area: content not under status bar / gesture navigation bar
+- [ ] Ripple effect on card tap
+- [ ] Hardware **Back** on selector → exits the app
 
 ### iOS
 
-- [ ] Notch / Dynamic Island: заголовок не обрезан
-- [ ] Home indicator: нижний padding корректный
-- [ ] Scroll списка с bounce
-- [ ] Hardware жестов back на селекторе — выход (home screen)
+- [ ] Notch / Dynamic Island: title not clipped
+- [ ] Home indicator: correct bottom padding
+- [ ] List scroll with bounce effect
+- [ ] Back gesture on selector → exits app (home screen)
 
 ---
 
-## Чеклист: WebView после выбора мола
+## Checklist: WebView After Mall Selection
 
-- [ ] Тап на карточку → открывается WebView
-- [ ] URL = `redirection_url` выбранного мола (не `webviewUrl`)
-- [ ] Лог: `[WebViewScreen] Loading ... URL: <redirection_url>`
-- [ ] Страница логина/приложения загружается
-- [ ] **Back** (Android) → history WebView, затем выход (не возврат на селектор)
-- [ ] На iOS после выбора нет swipe-back на селектор (ожидаемо: `pushReplacement`)
+- [ ] Tap on card → WebView opens
+- [ ] URL = selected mall's `redirection_url` (not `webviewUrl`)
+- [ ] Log: `[WebViewScreen] Loading ... URL: <redirection_url>`
+- [ ] Login / app page loads successfully
+- [ ] **Back** (Android) → WebView history, then exit (no return to selector)
+- [ ] On iOS after selection, no swipe-back to selector (expected: `pushReplacement`)
 
-Пример URL (Ostrovia):
+Example URL (Ostrovia):
 
 ```
 https://login.2take.it/?company_name=ch-ostrovia&legacy=true&d=0
@@ -115,142 +115,142 @@ https://login.2take.it/?company_name=ch-ostrovia&legacy=true&d=0
 
 ---
 
-## Чеклист: Fallback без селектора
+## Checklist: Fallback Without Selector
 
-Проверить в Firestore (или временно для теста):
+Verify in Firestore (or temporarily for testing):
 
-- [ ] `showSeletorPage: false` → сразу WebView с `webviewUrl`
-- [ ] `showSeletorPage: true` + пустой `selectorItems` → WebView с `webviewUrl`
-
----
-
-## Чеклист: Offline / Cache
-
-- [ ] Первый запуск online → селектор виден
-- [ ] Закрыть app, включить airplane mode, перезапустить
-- [ ] Селектор показывается из SharedPreferences cache
-- [ ] Карточки без сети: placeholder/error на картинках
+- [ ] `showSeletorPage: false` → WebView opens directly with `webviewUrl`
+- [ ] `showSeletorPage: true` + empty `selectorItems` → WebView with `webviewUrl`
 
 ---
 
-## Чеклист: Логин
+## Checklist: Offline / Cache
 
-> Тестировать **после выбора мола** в WebView. Для каждого способа: успешный вход, ошибка (отмена), повторный вход после logout.
+- [ ] First launch online → selector visible
+- [ ] Close app, enable airplane mode, relaunch
+- [ ] Selector shown from SharedPreferences cache
+- [ ] Cards offline: placeholder/error on images
+
+---
+
+## Checklist: Login
+
+> Test **after selecting a mall** in WebView. For each method: successful login, error/cancel, re-login after logout.
 
 ### Email
 
-- [ ] На экране логина есть форма входа по email (и пароль / magic link — как на web)
-- [ ] Ввод валидного email + пароля → успешный вход, редирект в приложение
-- [ ] Невалидный email / неверный пароль → понятная ошибка на странице
-- [ ] После входа сессия сохраняется (перезапуск app → остаётся залогинен)
+- [ ] Login screen has email form (password / magic link — as on web)
+- [ ] Valid email + password → successful login, redirect into app
+- [ ] Invalid email / wrong password → clear error on page
+- [ ] After login, session persists (restart app → still logged in)
 
 ### Google
 
-- [ ] Кнопка Google на странице логина открывает **native** Google Sign-In (не только web popup)
-- [ ] Выбор аккаунта → успешный вход в приложение
-- [ ] В логах: `[WEBVIEW] ... Company (Google Auth): polbau-demo` и `GoogleSignIn initialized`
-- [ ] Отмена Google picker → возврат на экран логина без crash
-- [ ] ⚠️ Для polbau нужен entry в `_googleAuthClientIds` + Android OAuth client с SHA-1
+- [ ] Google button opens **native** Google Sign-In (not web popup only)
+- [ ] Account selection → successful login
+- [ ] Logs: `[WEBVIEW] ... Company (Google Auth): polbau-demo` and `GoogleSignIn initialized`
+- [ ] Cancel Google picker → back to login screen, no crash
+- [ ] ⚠️ polbau requires entry in `_googleAuthClientIds` + Android OAuth client with SHA-1
 
 ### Facebook
 
-- [ ] Кнопка Facebook триггерит **native** Facebook login (`flutter_facebook_auth`)
-- [ ] Успешный login → токен передаётся в WebView, пользователь залогинен
-- [ ] Отмена / ошибка → сообщение на странице, app не падает
-- [ ] App ID в native: `683312195062841`
-- [ ] ⚠️ Android: `facebook_client_token` в `strings.xml` не должен быть placeholder
+- [ ] Facebook button triggers **native** login (`flutter_facebook_auth`)
+- [ ] Successful login → token passed to WebView, user logged in
+- [ ] Cancel / error → message on page, app does not crash
+- [ ] Native App ID: `683312195062841`
+- [ ] ⚠️ Android: `facebook_client_token` in `strings.xml` must not be a placeholder
 
-### Телефон (SMS / OTP)
+### Phone (SMS / OTP)
 
-- [ ] На экране логина доступен вход по номеру телефона
-- [ ] Ввод номера → отправка SMS / OTP (или переход на шаг кода)
-- [ ] Ввод корректного кода → успешный вход
-- [ ] Неверный код → ошибка, можно запросить повторно
-- [ ] На **реальном девайсе** (SMS на симуляторе может не работать)
+- [ ] Phone number login available on login screen
+- [ ] Enter number → SMS / OTP sent (or code entry step)
+- [ ] Correct code → successful login
+- [ ] Wrong code → error, can request again
+- [ ] Test on a **real device** (SMS may not work on simulator)
 
-### Apple (iOS, если есть на странице)
+### Apple (iOS, if available on page)
 
-- [ ] Sign in with Apple открывается нативно
-- [ ] Успешный вход → пользователь в приложении
-
----
-
-## Чеклист: Скан чеков (paragony)
-
-> Скан тестировать **на реальном девайсе** с камерой. На iOS Simulator камера недоступна — только gallery fallback.
-
-### Запуск скана
-
-- [ ] После логина доступна функция добавления / скана чека (кнопка «Skanuj», «Dodaj paragon» и т.п.)
-- [ ] Тап на scan → нативный диалог **Aparat / Camera** и **Galeria / Gallery**
-- [ ] В логах при scan: `FPK: launching camera` или `FPK: launching gallery`
-
-### Камера
-
-- [ ] **Aparat** → открывается системная камера (rear camera)
-- [ ] Разрешение на камеру запрашивается при первом использовании (iOS + Android)
-- [ ] Фото чека → загружается в web app, появляется preview / success
-- [ ] Отмена камеры → возврат без crash, можно повторить
-
-### Галерея
-
-- [ ] **Galeria** → открывается photo picker
-- [ ] Выбор фото чека из галереи → upload / обработка в web app
-- [ ] Разрешение на photo library (iOS `NSPhotoLibraryUsageDescription`)
-
-### Обработка чека
-
-- [ ] После upload чек распознаётся / принимается backend'ом (success UI)
-- [ ] Нечитаемое / невалидное фото → ошибка от сервера, можно загрузить снова
-- [ ] Повторный scan второго чека работает
-
-### Bridge APP2TI (если web вызывает напрямую)
-
-- [ ] `window.APP2TI.startScan()` из WebView открывает тот же camera/gallery flow
-- [ ] `window.APP2TI.startScanForId(id)` — scan с привязкой к id
+- [ ] Sign in with Apple opens natively
+- [ ] Successful login → user in app
 
 ---
 
-## Чеклист: FCM (опционально)
+## Checklist: Receipt Scanning (paragony)
 
-- [ ] Разрешение на push (iOS первый запуск)
-- [ ] Secret gesture: 7 быстрых тапов в правом верхнем углу → dialog с FCM token
-- [ ] Token копируется в clipboard
+> Test scanning on a **real device** with a camera. iOS Simulator has no camera — gallery fallback only.
+
+### Starting a scan
+
+- [ ] After login, receipt add/scan feature is available (e.g. "Skanuj", "Dodaj paragon")
+- [ ] Tap scan → native dialog **Aparat / Camera** and **Galeria / Gallery**
+- [ ] Scan logs: `FPK: launching camera` or `FPK: launching gallery`
+
+### Camera
+
+- [ ] **Aparat / Camera** → system camera opens (rear camera)
+- [ ] Camera permission requested on first use (iOS + Android)
+- [ ] Receipt photo → uploaded to web app, preview / success shown
+- [ ] Cancel camera → return without crash, can retry
+
+### Gallery
+
+- [ ] **Galeria / Gallery** → photo picker opens
+- [ ] Select receipt photo from gallery → upload / processing in web app
+- [ ] Photo library permission (iOS `NSPhotoLibraryUsageDescription`)
+
+### Receipt processing
+
+- [ ] After upload, receipt is recognized / accepted by backend (success UI)
+- [ ] Unreadable / invalid photo → server error, can upload again
+- [ ] Second receipt scan works
+
+### APP2TI bridge (if web calls directly)
+
+- [ ] `window.APP2TI.startScan()` from WebView opens the same camera/gallery flow
+- [ ] `window.APP2TI.startScanForId(id)` — scan bound to id
 
 ---
 
-## Чеклист: Прочее
+## Checklist: FCM (optional)
 
-- [ ] `tel:` / `mailto:` / `sms:` открывают системные приложения
-- [ ] Нет регрессии: другие flavors (`galeriaKazimierz`) стартуют как раньше
+- [ ] Push permission prompt (iOS first launch)
+- [ ] Secret gesture: 7 quick taps in top-right corner → FCM token dialog
+- [ ] Token copies to clipboard
 
 ---
 
-## Полезные логи
+## Checklist: Other
 
-| Лог | Ожидание |
+- [ ] `tel:` / `mailto:` / `sms:` open system apps
+- [ ] No regression: other flavors (`galeriaKazimierz`) start as before
+
+---
+
+## Useful Logs
+
+| Log | Expected |
 |-----|----------|
-| `[Flavor] Initialized: Moja Galeria (FlavorType.polbauDemo)` | flavor ок |
-| `[ConfigService] Fetching secure config for: polbau-demo` | Firestore doc |
-| `[WebViewScreen] Loading ... URL:` | правильный URL после выбора |
-| `[WEBVIEW] Flavor: ... Company (UI): polbau-demo` | config ок |
-| `GoogleSignIn: idToken len=...` | Google login прошёл |
-| `flutter_facebook_tokens` / `[NATIVE->WEB][FB]` | Facebook login прошёл |
-| `FPK: launching camera` / `FPK: launching gallery` | scan чека запущен |
+| `[Flavor] Initialized: Moja Galeria (FlavorType.polbauDemo)` | flavor OK |
+| `[ConfigService] Fetching secure config for: polbau-demo` | Firestore doc loaded |
+| `[WebViewScreen] Loading ... URL:` | correct URL after mall selection |
+| `[WEBVIEW] Flavor: ... Company (UI): polbau-demo` | config OK |
+| `GoogleSignIn: idToken len=...` | Google login succeeded |
+| `flutter_facebook_tokens` / `[NATIVE->WEB][FB]` | Facebook login succeeded |
+| `FPK: launching camera` / `FPK: launching gallery` | receipt scan started |
 
 ---
 
-## Известные ограничения (текущая версия)
+## Known Limitations (current version)
 
-1. **iOS `Info.plist`** — общий для всех flavors; Google/Facebook IDs могут быть от galeria
-2. **`ios/Runner/polbauDemo/GoogleService-Info.plist`** — заменить на plist с `BUNDLE_ID = com.polbau.polbau_demo`
-3. **Android `google-services.json`** — нужен реальный `appId` + OAuth client для `com.polbau.polbau_demo`
-4. **Dart `_googleAuthClientIds`** — добавить `'polbau-demo'` для корректного Google Auth
-5. **Facebook Android token** — `REPLACE_WITH_CLIENT_TOKEN` в `strings.xml`
+1. **iOS `Info.plist`** — shared across all flavors; Google/Facebook IDs may be from galeria
+2. **`ios/Runner/polbauDemo/GoogleService-Info.plist`** — replace with plist where `BUNDLE_ID = com.polbau.polbau_demo`
+3. **Android `google-services.json`** — needs real `appId` + OAuth client for `com.polbau.polbau_demo`
+4. **Dart `_googleAuthClientIds`** — add `'polbau-demo'` for correct Google Auth
+5. **Facebook Android token** — `REPLACE_WITH_CLIENT_TOKEN` in `strings.xml`
 
 ---
 
-## Быстрая команда (copy-paste)
+## Quick Commands (copy-paste)
 
 ```bash
 # Android
