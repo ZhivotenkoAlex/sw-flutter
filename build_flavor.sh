@@ -32,6 +32,16 @@ fi
 echo "🚀 Building $FLAVOR for $PLATFORM ($MODE mode)..."
 echo ""
 
+if [[ "$PLATFORM" == "ios" ]]; then
+    PLIST_SRC="ios/Runner/${FLAVOR}/GoogleService-Info.plist"
+    PLIST_DST="ios/Runner/GoogleService-Info.plist"
+    if [ -f "$PLIST_SRC" ]; then
+        cp "$PLIST_SRC" "$PLIST_DST"
+        echo "✓ Copied Firebase config: $PLIST_SRC"
+        echo ""
+    fi
+fi
+
 # Set flavor as environment variable
 export FLUTTER_FLAVOR=$FLAVOR
 

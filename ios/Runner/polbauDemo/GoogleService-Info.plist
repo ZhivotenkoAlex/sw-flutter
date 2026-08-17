@@ -3,23 +3,21 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>839029981684-kq8kc6rt5kkfqbameeui336gg5mipn55.apps.googleusercontent.com</string>
+	<string>235700920701-k4b8ekbtt3n9242hqlf77sbcr9gc6ksf.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.839029981684-kq8kc6rt5kkfqbameeui336gg5mipn55</string>
-	<key>ANDROID_CLIENT_ID</key>
-	<string>839029981684-5gulluphlrs1pkgdnomleo0cbrfc3vqf.apps.googleusercontent.com</string>
+	<string>com.googleusercontent.apps.235700920701-k4b8ekbtt3n9242hqlf77sbcr9gc6ksf</string>
 	<key>API_KEY</key>
-	<string>AIzaSyBo14c6d4SZshTAP-YvqMcHcTTJsXz9F1I</string>
+	<string>AIzaSyBuac0fWVHeHaerBUHDxzuMw0iGv_QS8Us</string>
 	<key>GCM_SENDER_ID</key>
-	<string>839029981684</string>
+	<string>235700920701</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>it.2take.galeriakazimierz</string>
+	<string>com.polbau.polbau</string>
 	<key>PROJECT_ID</key>
-	<string>galeria-kazimierz-827d4</string>
+	<string>polbau-4e707</string>
 	<key>STORAGE_BUCKET</key>
-	<string>galeria-kazimierz-827d4.firebasestorage.app</string>
+	<string>polbau-4e707.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -31,8 +29,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:839029981684:ios:b33dc71b2f7551e05e39a1</string>
-	<key>DATABASE_URL</key>
-	<string>https://galeria-kazimierz-827d4.firebaseio.com</string>
+	<string>1:235700920701:ios:d4cf25b089d9b2e1e2ec14</string>
 </dict>
 </plist>

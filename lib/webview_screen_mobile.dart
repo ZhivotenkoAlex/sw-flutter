@@ -40,7 +40,7 @@ Future<NavigationActionPolicy> _navigationPolicyForExternalSchemes(String url) a
 const Map<String, String> _googleAuthClientIds = {
   'galeria-kazimierz': '839029981684-v8su4cmc72t498k2evmejnohi0pk7v3c.apps.googleusercontent.com',
   'kazimierz-club-new': '159120615271-s2fbutrvvgk39rq71fafmeadksmk4g4d.apps.googleusercontent.com',
-  // Add new companies here as needed
+  'polbau-demo': '235700920701-0gh8pnikbhue765jjmrmhjiq3l4gqo6c.apps.googleusercontent.com',
 };
 
 class WebViewScreen extends StatefulWidget {

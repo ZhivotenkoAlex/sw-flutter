@@ -64,7 +64,7 @@ android {
 
         create("polbauDemo"){
             dimension = "company"
-            applicationId = "com.polbau.polbau_demo"
+            applicationId = "com.polbau.polbau"
             resValue("string", "app_name", "Moja Galeria")
             buildConfigField("String", "FLAVOR_NAME", "\"polbauDemo\"")
         }

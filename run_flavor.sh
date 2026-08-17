@@ -11,7 +11,7 @@ PLATFORM=$2
 MODE=${3:-debug}
 
 # Package IDs for all flavors
-ALL_PACKAGES="pl.a2ti.galeriakazimierz com.skanujwygrywaj.skanuj_wygrywaj com.polbau.polbau_demo"
+ALL_PACKAGES="pl.a2ti.galeriakazimierz com.skanujwygrywaj.skanuj_wygrywaj com.polbau.polbau com.polbau.polbau_demo"
 
 if [ -z "$FLAVOR" ] || [ -z "$PLATFORM" ]; then
     echo "Usage: $0 <flavor> <platform> [mode]"
@@ -74,6 +74,19 @@ fi
 
 echo "🚀 Running $FLAVOR for $PLATFORM in $MODE mode..."
 echo ""
+
+# Copy flavor-specific Firebase iOS config before build
+if [[ "$PLATFORM" == "ios" ]]; then
+    PLIST_SRC="ios/Runner/${FLAVOR}/GoogleService-Info.plist"
+    PLIST_DST="ios/Runner/GoogleService-Info.plist"
+    if [ -f "$PLIST_SRC" ]; then
+        cp "$PLIST_SRC" "$PLIST_DST"
+        echo "✓ Copied Firebase config: $PLIST_SRC"
+    else
+        echo "⚠️  Warning: $PLIST_SRC not found, using existing GoogleService-Info.plist"
+    fi
+    echo ""
+fi
 
 # Run the app
 flutter run \

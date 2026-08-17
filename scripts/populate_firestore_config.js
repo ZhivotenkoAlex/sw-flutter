@@ -131,31 +131,27 @@ const configs = {
     'polbau-demo': {
         firebaseConfig: {
             android: {
-                // TODO: Replace with actual values from google-services.json
-                apiKey: 'YOUR_ANDROID_API_KEY',
-                appId: 'YOUR_ANDROID_APP_ID',
-                messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-                projectId: 'YOUR_PROJECT_ID',
-                storageBucket: 'YOUR_STORAGE_BUCKET',
-                databaseURL: 'YOUR_DATABASE_URL'
+                apiKey: 'AIzaSyA2GGge0HBOwDJkOqc3o_Dv4vLLH18wCZ0',
+                appId: '1:235700920701:android:3cf74623abd40bf0e2ec14',
+                messagingSenderId: '235700920701',
+                projectId: 'polbau-4e707',
+                storageBucket: 'polbau-4e707.firebasestorage.app'
             },
             ios: {
-                // TODO: Replace with actual values from GoogleService-Info.plist
-                apiKey: 'YOUR_IOS_API_KEY',
-                appId: 'YOUR_IOS_APP_ID',
-                messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-                projectId: 'YOUR_PROJECT_ID',
-                storageBucket: 'YOUR_STORAGE_BUCKET',
-                databaseURL: 'YOUR_DATABASE_URL',
-                iosBundleId: 'com.polbau.polbau_demo'
+                apiKey: 'AIzaSyBuac0fWVHeHaerBUHDxzuMw0iGv_QS8Us',
+                appId: '1:235700920701:ios:d4cf25b089d9b2e1e2ec14',
+                messagingSenderId: '235700920701',
+                projectId: 'polbau-4e707',
+                storageBucket: 'polbau-4e707.firebasestorage.app',
+                iosBundleId: 'com.polbau.polbau'
             }
         },
         webviewUrl: 'https://YOUR_WEBVIEW_URL?company_name=polbau-demo',
         backendUrl: 'https://YOUR_BACKEND_URL/',
         googleAuthCompanyId: 'polbau-demo',
         isLegacy: false,
-        firebaseProject: 'YOUR_FIREBASE_PROJECT_ID',
-        version: 1
+        firebaseProject: 'polbau-4e707',
+        version: 2
     },
     'wislanka': {
         firebaseConfig: {

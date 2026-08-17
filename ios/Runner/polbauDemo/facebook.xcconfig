@@ -1,0 +1,9 @@
+// Polbau Facebook app — separate from galeria (683312195062841).
+// 1. Create a new app at developers.facebook.com
+// 2. Replace values below
+// 3. Add fb URL scheme to Runner/Info.plist (see POLBAU_FACEBOOK_URL_SCHEME)
+POLBAU_FACEBOOK_APP_ID = 1779001973254371
+POLBAU_FACEBOOK_CLIENT_TOKEN = REPLACE_WITH_POLBAU_FACEBOOK_CLIENT_TOKEN
+INFOPLIST_KEY_FacebookAppID = $(POLBAU_FACEBOOK_APP_ID)
+INFOPLIST_KEY_FacebookClientToken = $(POLBAU_FACEBOOK_CLIENT_TOKEN)
+INFOPLIST_KEY_FacebookDisplayName = Moja Galeria

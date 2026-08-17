@@ -106,7 +106,7 @@ class FlavorConfig {
         return FlavorConfig(
           flavor: FlavorType.polbauDemo,
           name: 'Moja Galeria',
-          packageId: 'com.polbau.polbau_demo',
+          packageId: 'com.polbau.polbau',
           companyId: 'polbau-demo',
         );
 
