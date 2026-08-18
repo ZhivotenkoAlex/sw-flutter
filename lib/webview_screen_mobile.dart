@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:collection';
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:image_picker/image_picker.dart';
@@ -65,6 +66,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   String? _pendingImageDataUrl; // pull-based bridge buffer
   bool _isPicking = false; // prevent duplicate pickers
+  String? _lastKnownUrl;
+  XFile? _deferredPickedImage;
+  bool _rendererCrashedDuringPick = false;
+
+  static const int _pickImageQuality = 50;
+  static const double _pickImageMaxSize = 1024;
+  static const int _b64ChunkSize = 24000;
   
   // Secret gesture for FCM token access
   int _secretTapCount = 0;
@@ -117,6 +125,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   @override
   void initState() {
     super.initState();
+    _lastKnownUrl = widget.initialUrl ?? widget.config.webviewUrl;
     // _loadCustomUrl();
     final fcmToken = FirebaseMessagingService.fcmToken;
     
@@ -602,6 +611,83 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
   }
 
+  Future<void> _prepareWebViewForExternalPicker() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _inAppController?.pauseTimers();
+      await _inAppController?.pause();
+    } catch (e) {
+      debugPrint('FPK: prepare webview error: $e');
+    }
+  }
+
+  Future<void> _resumeWebViewAfterExternalPicker() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _inAppController?.resumeTimers();
+      await _inAppController?.resume();
+    } catch (e) {
+      debugPrint('FPK: resume webview error: $e');
+    }
+  }
+
+  Future<void> _reloadWebViewAfterRendererCrash(InAppWebViewController controller) async {
+    final url = _lastKnownUrl ??
+        widget.initialUrl ??
+        widget.config.webviewUrl;
+    if (url.isEmpty) return;
+    debugPrint('[WEBVIEW] reloading after renderer crash: $url');
+    try {
+      await controller.loadUrl(urlRequest: URLRequest(url: WebUri(url)));
+    } catch (e) {
+      debugPrint('[WEBVIEW] reload after crash failed: $e');
+    }
+  }
+
+  Future<void> _maybeDispatchDeferredImage() async {
+    final image = _deferredPickedImage;
+    if (image == null) return;
+    _deferredPickedImage = null;
+    _rendererCrashedDuringPick = false;
+    debugPrint('FPK: dispatching deferred image => ${image.name}');
+    await _dispatchPickedImage(image);
+  }
+
+  ImagePicker _createImagePicker() => ImagePicker();
+
+  Future<XFile?> _pickImage(ImagePicker picker, ImageSource source) {
+    return picker.pickImage(
+      source: source,
+      preferredCameraDevice: CameraDevice.rear,
+      imageQuality: _pickImageQuality,
+      maxWidth: _pickImageMaxSize,
+      maxHeight: _pickImageMaxSize,
+    );
+  }
+
+  Future<bool> _isWebViewAlive() async {
+    try {
+      final result = await _inAppController?.evaluateJavascript(source: '1+1');
+      return result != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _dispatchPickedImageWhenReady(XFile image, {required bool fromCamera}) async {
+    if (fromCamera) {
+      _deferredPickedImage = image;
+      if (!_rendererCrashedDuringPick && await _isWebViewAlive()) {
+        _deferredPickedImage = null;
+        await _dispatchPickedImage(image);
+        return;
+      }
+      debugPrint('FPK: WebView recovering after camera, deferred dispatch');
+      return;
+    }
+    await _dispatchPickedImage(image);
+  }
+
   Future<void> _persistCurrentFileInputRef() async {
     try {
       await _inAppController?.evaluateJavascript(source: r'''
@@ -624,7 +710,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   Future<void> _handleFilePicker() async {
     try {
       debugPrint('FPK: _handleFilePicker() start');
-      final ImagePicker picker = ImagePicker();
+      final ImagePicker picker = _createImagePicker();
       
       // Probe the current <input type=file> for capture/accept hints
       String? metaStr;
@@ -723,30 +809,35 @@ class _WebViewScreenState extends State<WebViewScreen> {
         await _persistCurrentFileInputRef();
         try {
           final currentUrl = await _inAppController?.getUrl();
-          await _persistWebViewUrl(currentUrl?.toString() ?? '');
+          final urlStr = currentUrl?.toString() ?? '';
+          if (urlStr.isNotEmpty) _lastKnownUrl = urlStr;
+          await _persistWebViewUrl(urlStr);
         } catch (_) {}
 
         final XFile? image;
         if (result == 'camera') {
           debugPrint('FPK: launching camera');
+          await _prepareWebViewForExternalPicker();
           try {
-            image = await picker.pickImage(source: ImageSource.camera, preferredCameraDevice: CameraDevice.rear, imageQuality: 70, maxWidth: 1600, maxHeight: 1600);
+            image = await _pickImage(picker, ImageSource.camera);
           } catch (e) {
-            debugPrint('FPK: camera error => ' + e.toString());
-            return; // do not open gallery fallback on camera error
+            debugPrint('FPK: camera error => $e');
+            return;
+          } finally {
+            await _resumeWebViewAfterExternalPicker();
           }
           if (image == null) {
             debugPrint('FPK: camera cancelled or no image');
-            return; // user cancelled camera; do nothing
+            return;
           }
         } else {
           debugPrint('FPK: opening gallery');
-          image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 1600, maxHeight: 1600);
+          image = await _pickImage(picker, ImageSource.gallery);
         }
-        debugPrint('FPK: picker returned => ' + (image?.name ?? 'null'));
+        debugPrint('FPK: picker returned => ${image?.name ?? 'null'}');
 
         if (image != null) {
-          await _dispatchPickedImage(image);
+          await _dispatchPickedImageWhenReady(image, fromCamera: result == 'camera');
         }
       } else {
         debugPrint('FPK: dialog cancelled');
@@ -759,14 +850,41 @@ class _WebViewScreenState extends State<WebViewScreen> {
   Future<void> _dispatchPickedImage(XFile picked) async {
     try {
       final bytes = await picked.readAsBytes();
+      debugPrint('FPK: dispatch bytes=${bytes.length}');
       final b64 = base64Encode(bytes);
-      final name = picked.name.isNotEmpty ? picked.name : 'photo_' + DateTime.now().millisecondsSinceEpoch.toString() + '.jpg';
-      final dataUrl = 'data:image/jpeg;base64,' + b64;
-      final escData = dataUrl.replaceAll('\\', r'\\').replaceAll("'", r"\'");
+      final name = picked.name.isNotEmpty
+          ? picked.name
+          : 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final escName = name.replaceAll('\\', r'\\').replaceAll("'", r"\'");
-      await _inAppController?.evaluateJavascript(source: "try { window.__dispatchFlutterImage('" + escData + "', '" + escName + "'); } catch(e) { try { window.dispatchEvent(new CustomEvent('flutter_file_selected', { detail: { fileName: '" + escName + "', fileData: '" + escData + "' } })); } catch(_) {} }");
+
+      await _inAppController?.evaluateJavascript(
+        source: "try { window.__flutterB64Buffer = ''; } catch(e) {}",
+      );
+
+      for (var i = 0; i < b64.length; i += _b64ChunkSize) {
+        final end = min(i + _b64ChunkSize, b64.length);
+        final chunk = b64.substring(i, end);
+        final escChunk = chunk.replaceAll('\\', r'\\').replaceAll("'", r"\'");
+        await _inAppController?.evaluateJavascript(
+          source: "try { window.__flutterB64Buffer = (window.__flutterB64Buffer || '') + '$escChunk'; } catch(e) {}",
+        );
+      }
+
+      await _inAppController?.evaluateJavascript(
+        source: """
+          (function(){
+            try {
+              var dataUrl = 'data:image/jpeg;base64,' + (window.__flutterB64Buffer || '');
+              window.__flutterB64Buffer = '';
+              window.__dispatchFlutterImage(dataUrl, '$escName');
+            } catch(e) {
+              console.error('FPK: chunked dispatch error', e);
+            }
+          })();
+        """,
+      );
     } catch (e) {
-      debugPrint('FPK: dispatch error => ' + e.toString());
+      debugPrint('FPK: dispatch error => $e');
     }
   }
 
@@ -2502,9 +2620,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
           },
           onLoadStart: (controller, url) async {},
           onLoadStop: (controller, url) async {
+            final urlStr = url?.toString() ?? '';
+            if (urlStr.isNotEmpty) _lastKnownUrl = urlStr;
             await _injectPermissionOverrides();
             try { await controller.evaluateJavascript(source: _app2tiBridgeJs); } catch (_) {}
-            await _persistWebViewUrl(url?.toString() ?? '');
+            await _persistWebViewUrl(urlStr);
+            await _maybeDispatchDeferredImage();
+          },
+          onRenderProcessGone: (controller, detail) {
+            debugPrint('[WEBVIEW] render process gone didCrash=${detail.didCrash} duringPick=$_isPicking');
+            if (_isPicking) _rendererCrashedDuringPick = true;
+            _reloadWebViewAfterRendererCrash(controller);
           },
           onLoadError: (controller, url, code, message) {},
           shouldOverrideUrlLoading: (controller, navAction) async {
