@@ -14,6 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'app_config.dart';
 import 'services/secure_config_service.dart';
+import 'services/mall_selection_storage.dart';
 import 'flavor_config.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -588,6 +589,38 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
 
 
+  Future<void> _persistWebViewUrl(String url) async {
+    if (url.isEmpty || !url.startsWith('http')) return;
+    if (widget.config is! SecureAppConfig) return;
+    try {
+      await MallSelectionStorage.saveWebViewUrl(
+        (widget.config as SecureAppConfig).companyId,
+        url,
+      );
+    } catch (e) {
+      debugPrint('[WEBVIEW] persist url error: $e');
+    }
+  }
+
+  Future<void> _persistCurrentFileInputRef() async {
+    try {
+      await _inAppController?.evaluateJavascript(source: r'''
+        (function(){
+          try {
+            var inp = window.currentFileInput;
+            if (!inp) return;
+            if (inp.id) sessionStorage.setItem('flutter_pending_file_input_id', inp.id);
+            else sessionStorage.removeItem('flutter_pending_file_input_id');
+            if (inp.name) sessionStorage.setItem('flutter_pending_file_input_name', inp.name);
+            else sessionStorage.removeItem('flutter_pending_file_input_name');
+          } catch(e) {}
+        })();
+      ''');
+    } catch (e) {
+      debugPrint('FPK: persist file input ref error: $e');
+    }
+  }
+
   Future<void> _handleFilePicker() async {
     try {
       debugPrint('FPK: _handleFilePicker() start');
@@ -687,6 +720,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
       debugPrint('FPK: dialog result => ' + (result?.toString() ?? 'null'));
 
       if (result != null) {
+        await _persistCurrentFileInputRef();
+        try {
+          final currentUrl = await _inAppController?.getUrl();
+          await _persistWebViewUrl(currentUrl?.toString() ?? '');
+        } catch (_) {}
+
         final XFile? image;
         if (result == 'camera') {
           debugPrint('FPK: launching camera');
@@ -712,7 +751,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
       } else {
         debugPrint('FPK: dialog cancelled');
       }
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('FPK: _handleFilePicker error: $e');
+    }
   }
   
   Future<void> _dispatchPickedImage(XFile picked) async {
@@ -2093,6 +2134,18 @@ class _WebViewScreenState extends State<WebViewScreen> {
                         var d = ev && ev.detail || {};
                         console.log('[FPK-JS] flutter_file_selected received name=', d.fileName, ' size=', (d.fileData||'').length);
                         var inp = window.currentFileInput;
+                        if (!inp || String(inp.type).toLowerCase() !== 'file') {
+                          try {
+                            var savedId = sessionStorage.getItem('flutter_pending_file_input_id');
+                            if (savedId) inp = document.getElementById(savedId);
+                            if (!inp) {
+                              var savedName = sessionStorage.getItem('flutter_pending_file_input_name');
+                              if (savedName) inp = document.querySelector('input[type="file"][name="' + savedName + '"]');
+                            }
+                            if (!inp) inp = document.querySelector('input[type="file"]');
+                            if (inp) window.currentFileInput = inp;
+                          } catch(_) {}
+                        }
                         if (!inp || String(inp.type).toLowerCase() !== 'file') { console.warn('[FPK-JS] no currentFileInput to populate'); return; }
                         var blob = dataUrlToBlob(d.fileData);
                         if (!blob) return;
@@ -2451,6 +2504,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
           onLoadStop: (controller, url) async {
             await _injectPermissionOverrides();
             try { await controller.evaluateJavascript(source: _app2tiBridgeJs); } catch (_) {}
+            await _persistWebViewUrl(url?.toString() ?? '');
           },
           onLoadError: (controller, url, code, message) {},
           shouldOverrideUrlLoading: (controller, navAction) async {

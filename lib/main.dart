@@ -11,6 +11,7 @@ import 'services/secure_config_service.dart';
 import 'firebase_config_loader.dart';
 import 'flavor_config.dart';
 import 'mall_selector_screen.dart';
+import 'services/mall_selection_storage.dart';
 
 // Helper function to load messaging app options in background handler
 Future<FirebaseOptions?> _loadMessagingAppOptionsFromPrefs() async {
@@ -115,17 +116,34 @@ void main() async {
     }
   }
   
-  // 3. Run app with config (use a fallback if config failed to load)
+  // 3. Restore WebView session after Android activity recreation (e.g. camera)
+  String? restoredWebViewUrl;
+  if (config != null && config.showSeletorPage) {
+    try {
+      restoredWebViewUrl = await MallSelectionStorage.getWebViewUrl(config.companyId);
+      if (restoredWebViewUrl != null) {
+        print('[Main] Restoring WebView session: $restoredWebViewUrl');
+      }
+    } catch (e) {
+      print('[Main] Failed to restore WebView session: $e');
+    }
+  }
+
+  // 4. Run app with config (use a fallback if config failed to load)
   if (config != null) {
-  runApp(MyApp(config: config));
+    runApp(MyApp(config: config, restoredWebViewUrl: restoredWebViewUrl));
   } else {
     // Fallback for web or if config fetch failed
     runApp(const MyApp(config: null));
   }
 }
 
-Widget _buildHomeScreen(SecureAppConfig config) {
+Widget _buildHomeScreen(SecureAppConfig config, String? restoredWebViewUrl) {
   if (config.showSeletorPage && config.selectorItems.isNotEmpty) {
+    final sessionUrl = restoredWebViewUrl;
+    if (sessionUrl != null && sessionUrl.isNotEmpty) {
+      return WebViewScreen(config: config, initialUrl: sessionUrl);
+    }
     return MallSelectorScreen(config: config);
   }
   return WebViewScreen(config: config);
@@ -133,8 +151,9 @@ Widget _buildHomeScreen(SecureAppConfig config) {
 
 class MyApp extends StatelessWidget {
   final SecureAppConfig? config;
-  
-  const MyApp({super.key, this.config});
+  final String? restoredWebViewUrl;
+
+  const MyApp({super.key, this.config, this.restoredWebViewUrl});
 
   @override
   Widget build(BuildContext context) {
@@ -171,7 +190,7 @@ class MyApp extends StatelessWidget {
       title: isLegacyMode ? 'Skanuj Wygrywaj' : 'Skanuj Wygrywaj New',
       theme: appTheme,
       home: config != null
-        ? _buildHomeScreen(config!)
+        ? _buildHomeScreen(config!, restoredWebViewUrl)
         : const Scaffold(
             body: Center(
               child: Column(

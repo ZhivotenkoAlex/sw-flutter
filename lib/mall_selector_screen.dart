@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'models/selector_item.dart';
 import 'services/secure_config_service.dart';
+import 'services/mall_selection_storage.dart';
 import 'webview_screen.dart';
 
 class MallSelectorScreen extends StatefulWidget {
@@ -35,7 +36,12 @@ class _MallSelectorScreenState extends State<MallSelectorScreen> {
     super.dispose();
   }
 
-  void _openMall(SelectorItem item) {
+  Future<void> _openMall(SelectorItem item) async {
+    await MallSelectionStorage.saveWebViewUrl(
+      widget.config.companyId,
+      item.redirectionUrl,
+    );
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => WebViewScreen(
