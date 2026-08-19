@@ -644,9 +644,35 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
   }
 
+  Future<void> _waitFor2takePageReady() async {
+    const maxAttempts = 40;
+    for (var i = 0; i < maxAttempts; i++) {
+      try {
+        final result = await _inAppController?.evaluateJavascript(source: r'''
+          (function(){
+            try {
+              var host = String(location.host || '').toLowerCase();
+              if (host.indexOf('2take') === -1) return 'ready';
+              if (window.__flutter2tiLoggedIn) return 'ready';
+              return 'wait';
+            } catch(e) { return 'ready'; }
+          })()
+        ''');
+        if (result == 'ready') {
+          if (i > 0) debugPrint('FPK: 2take page ready after ${i * 500}ms');
+          return;
+        }
+      } catch (_) {}
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+    debugPrint('FPK: 2take page ready timeout, dispatching anyway');
+  }
+
   Future<void> _maybeDispatchDeferredImage() async {
     final image = _deferredPickedImage;
     if (image == null) return;
+    debugPrint('FPK: waiting for page ready before deferred dispatch');
+    await _waitFor2takePageReady();
     _deferredPickedImage = null;
     _rendererCrashedDuringPick = false;
     debugPrint('FPK: dispatching deferred image => ${image.name}');
@@ -674,15 +700,29 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
   }
 
+  Future<void> _reloadWebViewIfRendererCrashedDuringPick() async {
+    if (!_rendererCrashedDuringPick) return;
+    final controller = _inAppController;
+    if (controller == null) return;
+    debugPrint('FPK: reloading WebView after camera (renderer had crashed)');
+    await _reloadWebViewAfterRendererCrash(controller);
+  }
+
   Future<void> _dispatchPickedImageWhenReady(XFile image, {required bool fromCamera}) async {
     if (fromCamera) {
       _deferredPickedImage = image;
-      if (!_rendererCrashedDuringPick && await _isWebViewAlive()) {
+      if (_rendererCrashedDuringPick) {
+        debugPrint('FPK: WebView recovering after camera, reload then deferred dispatch');
+        await _reloadWebViewIfRendererCrashedDuringPick();
+        return;
+      }
+      if (await _isWebViewAlive()) {
         _deferredPickedImage = null;
         await _dispatchPickedImage(image);
         return;
       }
-      debugPrint('FPK: WebView recovering after camera, deferred dispatch');
+      debugPrint('FPK: WebView dead after camera, reload then deferred dispatch');
+      await _reloadWebViewIfRendererCrashedDuringPick();
       return;
     }
     await _dispatchPickedImage(image);
@@ -814,7 +854,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
           await _persistWebViewUrl(urlStr);
         } catch (_) {}
 
-        final XFile? image;
+        XFile? image;
         if (result == 'camera') {
           debugPrint('FPK: launching camera');
           await _prepareWebViewForExternalPicker();
@@ -822,9 +862,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
             image = await _pickImage(picker, ImageSource.camera);
           } catch (e) {
             debugPrint('FPK: camera error => $e');
-            return;
+            image = null;
           } finally {
             await _resumeWebViewAfterExternalPicker();
+            if (image == null && _rendererCrashedDuringPick) {
+              await _reloadWebViewIfRendererCrashedDuringPick();
+              _rendererCrashedDuringPick = false;
+            }
           }
           if (image == null) {
             debugPrint('FPK: camera cancelled or no image');
@@ -2237,6 +2281,21 @@ class _WebViewScreenState extends State<WebViewScreen> {
               source: r'''
                 (function(){
                   try {
+                    window.__flutter2tiLoggedIn = false;
+                    function markReady(){ window.__flutter2tiLoggedIn = true; }
+                    ['logged2ti','loaded2ti'].forEach(function(n){
+                      window.addEventListener(n, markReady, true);
+                    });
+                  } catch(e) {}
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+              forMainFrameOnly: false,
+            ),
+            UserScript(
+              source: r'''
+                (function(){
+                  try {
                     function dataUrlToBlob(dataUrl){
                       try {
                         var parts = String(dataUrl||'').split(',');
@@ -2275,6 +2334,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
                             window.$($2TI.BILL_PROGRESSBAR_WRAPPER_SELECTOR).stop(true,true).fadeIn(300);
                             if ($2TI.BILL_PROGRESSBAR_ELEMENT_SELECTOR) { window.$($2TI.BILL_PROGRESSBAR_ELEMENT_SELECTOR).css('width','10%'); }
                             try { window.dispatchEvent(new CustomEvent('startspinner')); } catch(_) {}
+                            setTimeout(function(){
+                              try {
+                                window.dispatchEvent(new CustomEvent('stopspinner'));
+                                if ($2TI.BILL_PROGRESSBAR_WRAPPER_SELECTOR) {
+                                  window.$($2TI.BILL_PROGRESSBAR_WRAPPER_SELECTOR).stop(true,true).fadeOut(300);
+                                }
+                              } catch(_) {}
+                            }, 90000);
                           }
                         } catch(_) {}
                         // Use DataTransfer to set files
@@ -2629,7 +2696,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
           },
           onRenderProcessGone: (controller, detail) {
             debugPrint('[WEBVIEW] render process gone didCrash=${detail.didCrash} duringPick=$_isPicking');
-            if (_isPicking) _rendererCrashedDuringPick = true;
+            if (_isPicking) {
+              _rendererCrashedDuringPick = true;
+              debugPrint('[WEBVIEW] deferring reload until camera returns');
+              return;
+            }
             _reloadWebViewAfterRendererCrash(controller);
           },
           onLoadError: (controller, url, code, message) {},
