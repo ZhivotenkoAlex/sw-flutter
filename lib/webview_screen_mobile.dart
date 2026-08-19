@@ -71,6 +71,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   bool _rendererCrashedDuringPick = false;
   bool _isDispatchingDeferred = false;
   DateTime? _postDispatchGraceUntil;
+  String? _pendingScanUrl;
 
   static const int _pickImageQuality = 50;
   static const double _pickImageMaxSize = 1024;
@@ -621,6 +622,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   bool _shouldPersistWebViewUrl(String url) => !_isTransientScanUrl(url);
 
+  String _sanitize2takeReloadUrl(String url) {
+    return url.replaceAll(
+      RegExp(r'redirectAfterLogin/\d+/', caseSensitive: false),
+      '',
+    );
+  }
+
   bool get _inPostDispatchGrace =>
       _postDispatchGraceUntil != null &&
       DateTime.now().isBefore(_postDispatchGraceUntil!);
@@ -657,10 +665,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
         _lastKnownUrl = currentStr;
       }
     } catch (_) {}
-    final url = _lastKnownUrl ??
+    final raw = _pendingScanUrl ??
+        _lastKnownUrl ??
         widget.initialUrl ??
         widget.config.webviewUrl;
-    if (url.isEmpty) return;
+    if (raw.isEmpty) return;
+    final url = _sanitize2takeReloadUrl(raw);
     debugPrint('[WEBVIEW] reloading after renderer crash: $url');
     try {
       await controller.loadUrl(urlRequest: URLRequest(url: WebUri(url)));
@@ -671,6 +681,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   Future<void> _waitFor2takePageReady() async {
     const maxAttempts = 40;
+    String lastReason = 'wait';
     for (var i = 0; i < maxAttempts; i++) {
       try {
         final result = await _inAppController?.evaluateJavascript(source: r'''
@@ -678,19 +689,27 @@ class _WebViewScreenState extends State<WebViewScreen> {
             try {
               var host = String(location.host || '').toLowerCase();
               if (host.indexOf('2take') === -1) return 'ready';
-              if (window.__flutter2tiLoggedIn) return 'ready';
-              return 'wait';
+              var inp = document.querySelector('input[type="file"]');
+              if (!inp) return 'wait:no_input';
+              if (window.__flutter2tiReceiptReady) return 'ready';
+              return 'wait:no_receipt';
             } catch(e) { return 'ready'; }
           })()
         ''');
-        if (result == 'ready') {
-          if (i > 0) debugPrint('FPK: 2take page ready after ${i * 500}ms');
+        final status = result?.toString() ?? '';
+        if (status == 'ready') {
+          if (i > 0) debugPrint('FPK: 2take scan page ready after ${i * 500}ms');
+          await Future.delayed(const Duration(milliseconds: 300));
           return;
+        }
+        lastReason = status.isEmpty ? 'wait' : status;
+        if (i == 0 || i % 4 == 0) {
+          debugPrint('FPK: waiting for scan page ($lastReason) t=${i * 500}ms');
         }
       } catch (_) {}
       await Future.delayed(const Duration(milliseconds: 500));
     }
-    debugPrint('FPK: 2take page ready timeout, dispatching anyway');
+    debugPrint('FPK: 2take scan page ready timeout ($lastReason), dispatching anyway');
   }
 
   Future<void> _maybeDispatchDeferredImage() async {
@@ -706,6 +725,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
       debugPrint('FPK: dispatching deferred image => ${image.name}');
       await _dispatchPickedImage(image);
       _postDispatchGraceUntil = DateTime.now().add(const Duration(seconds: 60));
+      _pendingScanUrl = null;
       try {
         final currentUrl = await _inAppController?.getUrl();
         final urlStr = currentUrl?.toString() ?? '';
@@ -918,6 +938,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
         debugPrint('FPK: picker returned => ${image?.name ?? 'null'}');
 
         if (image != null) {
+          if (href.isNotEmpty) {
+            _pendingScanUrl = _sanitize2takeReloadUrl(href);
+          }
           await _dispatchPickedImageWhenReady(image, fromCamera: result == 'camera');
         }
       } else {
@@ -2319,17 +2342,23 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 (function(){
                   try {
                     window.__flutter2tiLoggedIn = false;
-                    function markReady(){ window.__flutter2tiLoggedIn = true; }
-                    ['logged2ti','loaded2ti'].forEach(function(n){
-                      window.addEventListener(n, markReady, true);
-                      document.addEventListener(n, markReady, true);
-                    });
+                    window.__flutter2tiPageLoaded = false;
+                    window.__flutter2tiReceiptReady = false;
+                    function markLogged(){ window.__flutter2tiLoggedIn = true; }
+                    function markLoaded(){ window.__flutter2tiPageLoaded = true; }
+                    function markReceipt(){ window.__flutter2tiReceiptReady = true; }
+                    window.addEventListener('logged2ti', markLogged, true);
+                    document.addEventListener('logged2ti', markLogged, true);
+                    window.addEventListener('loaded2ti', markLoaded, true);
+                    document.addEventListener('loaded2ti', markLoaded, true);
                     var origLog = console.log;
                     console.log = function(){
                       try {
                         for (var i = 0; i < arguments.length; i++) {
                           var a = String(arguments[i] || '');
-                          if (a.indexOf('logged2ti') >= 0 || a.indexOf('loaded2ti') >= 0) markReady();
+                          if (a.indexOf('logged2ti') >= 0) markLogged();
+                          if (a.indexOf('loaded2ti') >= 0) markLoaded();
+                          if (a.indexOf('initializing receipt file upload module') >= 0) markReceipt();
                         }
                       } catch(_) {}
                       return origLog.apply(console, arguments);
@@ -2732,9 +2761,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
             try {
               debugPrint('[WEBVIEW CONSOLE] ' + msg.message);
               final text = msg.message;
-              if (text.contains('logged2ti') || text.contains('loaded2ti')) {
+              if (text.contains('initializing receipt file upload module')) {
+                controller.evaluateJavascript(
+                  source: 'try { window.__flutter2tiReceiptReady = true; } catch(e) {}',
+                );
+              } else if (text.contains('logged2ti')) {
                 controller.evaluateJavascript(
                   source: 'try { window.__flutter2tiLoggedIn = true; } catch(e) {}',
+                );
+              } else if (text.contains('loaded2ti')) {
+                controller.evaluateJavascript(
+                  source: 'try { window.__flutter2tiPageLoaded = true; } catch(e) {}',
                 );
               }
             } catch (_) {}
@@ -2742,7 +2779,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
           onLoadStart: (controller, url) async {
             try {
               await controller.evaluateJavascript(
-                source: 'try { window.__flutter2tiLoggedIn = false; } catch(e) {}',
+                source: '''try {
+                  window.__flutter2tiLoggedIn = false;
+                  window.__flutter2tiPageLoaded = false;
+                  window.__flutter2tiReceiptReady = false;
+                } catch(e) {}''',
               );
             } catch (_) {}
           },
