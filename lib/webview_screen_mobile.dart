@@ -69,6 +69,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
   String? _lastKnownUrl;
   XFile? _deferredPickedImage;
   bool _rendererCrashedDuringPick = false;
+  bool _isDispatchingDeferred = false;
+  DateTime? _postDispatchGraceUntil;
 
   static const int _pickImageQuality = 50;
   static const double _pickImageMaxSize = 1024;
@@ -600,6 +602,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   Future<void> _persistWebViewUrl(String url) async {
     if (url.isEmpty || !url.startsWith('http')) return;
+    if (!_shouldPersistWebViewUrl(url)) return;
     if (widget.config is! SecureAppConfig) return;
     try {
       await MallSelectionStorage.saveWebViewUrl(
@@ -610,6 +613,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
       debugPrint('[WEBVIEW] persist url error: $e');
     }
   }
+
+  bool _isTransientScanUrl(String url) {
+    final lower = url.toLowerCase();
+    return lower.contains('/fm/1') || lower.contains('redirectafterlogin');
+  }
+
+  bool _shouldPersistWebViewUrl(String url) => !_isTransientScanUrl(url);
+
+  bool get _inPostDispatchGrace =>
+      _postDispatchGraceUntil != null &&
+      DateTime.now().isBefore(_postDispatchGraceUntil!);
 
   Future<void> _prepareWebViewForExternalPicker() async {
     if (!Platform.isAndroid) return;
@@ -632,6 +646,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   Future<void> _reloadWebViewAfterRendererCrash(InAppWebViewController controller) async {
+    if (_inPostDispatchGrace) {
+      debugPrint('[WEBVIEW] skipping crash reload during post-dispatch grace');
+      return;
+    }
+    try {
+      final current = await controller.getUrl();
+      final currentStr = current?.toString() ?? '';
+      if (currentStr.isNotEmpty && !_isTransientScanUrl(currentStr)) {
+        _lastKnownUrl = currentStr;
+      }
+    } catch (_) {}
     final url = _lastKnownUrl ??
         widget.initialUrl ??
         widget.config.webviewUrl;
@@ -669,14 +694,26 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   Future<void> _maybeDispatchDeferredImage() async {
-    final image = _deferredPickedImage;
-    if (image == null) return;
-    debugPrint('FPK: waiting for page ready before deferred dispatch');
-    await _waitFor2takePageReady();
+    if (_deferredPickedImage == null || _isDispatchingDeferred) return;
+    _isDispatchingDeferred = true;
+    final image = _deferredPickedImage!;
     _deferredPickedImage = null;
-    _rendererCrashedDuringPick = false;
-    debugPrint('FPK: dispatching deferred image => ${image.name}');
-    await _dispatchPickedImage(image);
+
+    try {
+      debugPrint('FPK: waiting for page ready before deferred dispatch');
+      await _waitFor2takePageReady();
+      _rendererCrashedDuringPick = false;
+      debugPrint('FPK: dispatching deferred image => ${image.name}');
+      await _dispatchPickedImage(image);
+      _postDispatchGraceUntil = DateTime.now().add(const Duration(seconds: 60));
+      try {
+        final currentUrl = await _inAppController?.getUrl();
+        final urlStr = currentUrl?.toString() ?? '';
+        if (urlStr.isNotEmpty) _lastKnownUrl = urlStr;
+      } catch (_) {}
+    } finally {
+      _isDispatchingDeferred = false;
+    }
   }
 
   ImagePicker _createImagePicker() => ImagePicker();
@@ -2285,7 +2322,18 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     function markReady(){ window.__flutter2tiLoggedIn = true; }
                     ['logged2ti','loaded2ti'].forEach(function(n){
                       window.addEventListener(n, markReady, true);
+                      document.addEventListener(n, markReady, true);
                     });
+                    var origLog = console.log;
+                    console.log = function(){
+                      try {
+                        for (var i = 0; i < arguments.length; i++) {
+                          var a = String(arguments[i] || '');
+                          if (a.indexOf('logged2ti') >= 0 || a.indexOf('loaded2ti') >= 0) markReady();
+                        }
+                      } catch(_) {}
+                      return origLog.apply(console, arguments);
+                    };
                   } catch(e) {}
                 })();
               ''',
@@ -2683,9 +2731,21 @@ class _WebViewScreenState extends State<WebViewScreen> {
           onConsoleMessage: (controller, msg) {
             try {
               debugPrint('[WEBVIEW CONSOLE] ' + msg.message);
+              final text = msg.message;
+              if (text.contains('logged2ti') || text.contains('loaded2ti')) {
+                controller.evaluateJavascript(
+                  source: 'try { window.__flutter2tiLoggedIn = true; } catch(e) {}',
+                );
+              }
             } catch (_) {}
           },
-          onLoadStart: (controller, url) async {},
+          onLoadStart: (controller, url) async {
+            try {
+              await controller.evaluateJavascript(
+                source: 'try { window.__flutter2tiLoggedIn = false; } catch(e) {}',
+              );
+            } catch (_) {}
+          },
           onLoadStop: (controller, url) async {
             final urlStr = url?.toString() ?? '';
             if (urlStr.isNotEmpty) _lastKnownUrl = urlStr;
@@ -2699,6 +2759,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
             if (_isPicking) {
               _rendererCrashedDuringPick = true;
               debugPrint('[WEBVIEW] deferring reload until camera returns');
+              return;
+            }
+            if (_inPostDispatchGrace) {
+              debugPrint('[WEBVIEW] skipping crash reload during post-dispatch grace');
               return;
             }
             _reloadWebViewAfterRendererCrash(controller);
