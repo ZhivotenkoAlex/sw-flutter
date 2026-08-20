@@ -679,9 +679,60 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
   }
 
+  Future<String> _open2takeScanTab() async {
+    try {
+      final result = await _inAppController?.evaluateJavascript(source: r'''
+        (function(){
+          try {
+            function isFileTrigger(el){
+              try {
+                if (!el) return true;
+                if (el.closest && el.closest('input[type="file"]')) return true;
+                var label = el.closest && el.closest('label');
+                if (label) {
+                  var forId = label.getAttribute('for');
+                  var inp = forId ? document.getElementById(forId) : (label.querySelector && label.querySelector('input[type="file"]'));
+                  if (inp && String(inp.type).toLowerCase() === 'file') return true;
+                }
+              } catch(_) {}
+              return false;
+            }
+            function clickEl(el){
+              if (!el || isFileTrigger(el)) return false;
+              try { el.click(); return true; } catch(_) { return false; }
+            }
+            var hrefHits = document.querySelectorAll('a[href*="/fm/1"]');
+            for (var i = 0; i < hrefHits.length; i++) {
+              if (clickEl(hrefHits[i])) return 'href_fm1';
+            }
+            var footerSel = '#footer a, footer a, .footer a, .bottom-nav a, .tabbar a, [id*="footer"] a, [class*="footer"] a';
+            var footerLinks = document.querySelectorAll(footerSel);
+            if (footerLinks.length > 1 && clickEl(footerLinks[1])) return 'footer_index_1';
+            if (window.$) {
+              try {
+                var $fm = window.$('a[href*="/fm/1"]').first();
+                if ($fm && $fm.length && clickEl($fm.get(0))) return 'jq_href_fm1';
+                var $foot = window.$(footerSel);
+                if ($foot.length > 1 && clickEl($foot.get(1))) return 'jq_footer_index_1';
+              } catch(_) {}
+            }
+            return 'none';
+          } catch(e) { return 'err'; }
+        })()
+      ''');
+      final status = result?.toString() ?? 'none';
+      debugPrint('FPK: open scan tab => $status');
+      return status;
+    } catch (e) {
+      debugPrint('FPK: open scan tab error: $e');
+      return 'err';
+    }
+  }
+
   Future<void> _waitFor2takePageReady() async {
     const maxAttempts = 40;
     String lastReason = 'wait';
+    var scanTabOpened = false;
     for (var i = 0; i < maxAttempts; i++) {
       try {
         final result = await _inAppController?.evaluateJavascript(source: r'''
@@ -699,10 +750,15 @@ class _WebViewScreenState extends State<WebViewScreen> {
         final status = result?.toString() ?? '';
         if (status == 'ready') {
           if (i > 0) debugPrint('FPK: 2take scan page ready after ${i * 500}ms');
+          await _open2takeScanTab();
           await Future.delayed(const Duration(milliseconds: 300));
           return;
         }
         lastReason = status.isEmpty ? 'wait' : status;
+        if (!scanTabOpened && i >= 4) {
+          final opened = await _open2takeScanTab();
+          if (opened != 'none' && opened != 'err') scanTabOpened = true;
+        }
         if (i == 0 || i % 4 == 0) {
           debugPrint('FPK: waiting for scan page ($lastReason) t=${i * 500}ms');
         }
@@ -710,6 +766,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
       await Future.delayed(const Duration(milliseconds: 500));
     }
     debugPrint('FPK: 2take scan page ready timeout ($lastReason), dispatching anyway');
+    await _open2takeScanTab();
   }
 
   Future<void> _maybeDispatchDeferredImage() async {
@@ -723,6 +780,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
       await _waitFor2takePageReady();
       _rendererCrashedDuringPick = false;
       debugPrint('FPK: dispatching deferred image => ${image.name}');
+      await _open2takeScanTab();
       await _dispatchPickedImage(image);
       _postDispatchGraceUntil = DateTime.now().add(const Duration(seconds: 60));
       _pendingScanUrl = null;
