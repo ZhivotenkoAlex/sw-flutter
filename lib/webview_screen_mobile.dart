@@ -730,7 +730,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 return true;
               } catch(_) { return false; }
             }
-            function collectBottomNavItems(){
+            function collectNavItems(preferTop){
               var out = [];
               var seen = new Set();
               function add(el){
@@ -738,24 +738,51 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 try {
                   var r = el.getBoundingClientRect();
                   if (!r.width && !r.height) return;
-                  if (r.top < window.innerHeight * 0.55) return;
+                  var mid = window.innerHeight * 0.55;
+                  if (preferTop && r.top > mid) return;
+                  if (!preferTop && r.top < mid) return;
                 } catch(_) {}
                 seen.add(el);
                 out.push(el);
               }
-              var roots = document.querySelectorAll('.v-bottom-navigation, .v-bottom-navigation__content, [class*="bottom-navigation"], footer, #footer, [class*="tab-bar"], nav, [class*="menu-bar"]');
+              var roots = document.querySelectorAll(
+                '.v-bottom-navigation, .v-bottom-navigation__content, [class*="bottom-navigation"], ' +
+                '[class*="top-navigation"], [class*="main-nav"], [class*="menu-tabs"], ' +
+                'header nav, header [role="tablist"], nav, [class*="tab-bar"], [class*="menu-bar"], footer, #footer'
+              );
               for (var r = 0; r < roots.length; r++) {
-                roots[r].querySelectorAll('button, .v-btn, a, [role="tab"], [role="button"], .v-bottom-navigation-item, li').forEach(add);
+                roots[r].querySelectorAll('button, .v-btn, a, [role="tab"], [role="button"], .v-tab, li, span').forEach(add);
+              }
+              if (out.length === 0) {
+                document.querySelectorAll('button, a, [role="tab"], .v-btn').forEach(add);
               }
               return out;
             }
-            function clickScanByText(items){
-              for (var i = 0; i < items.length; i++) {
-                var t = String(items[i].textContent || items[i].innerText || '').toLowerCase();
-                if (t.indexOf('skan') >= 0 || t.indexOf('scan') >= 0 || t.indexOf('paragon') >= 0) {
-                  if (clickEl(items[i])) return 'bottom_text_scan';
+            function tryClickScanNav(){
+              var topItems = collectNavItems(true);
+              console.log('[FPK-JS] top navItems=', topItems.length,
+                topItems.slice(0, 6).map(function(el){ return String(el.textContent||'').trim().slice(0,20); }).join('|'));
+              var topHit = (function(items){
+                for (var i = 0; i < items.length; i++) {
+                  var t = String(items[i].textContent || items[i].innerText || '').toLowerCase().trim();
+                  if (t.indexOf('skanuj') >= 0 || t.indexOf('skan') >= 0 || t.indexOf('scan') >= 0 || t.indexOf('paragon') >= 0) {
+                    if (clickEl(items[i])) return 'top_text_scan';
+                  }
+                }
+                return null;
+              })(topItems);
+              if (topHit) return topHit;
+              var bottomItems = collectNavItems(false);
+              console.log('[FPK-JS] bottom navItems=', bottomItems.length,
+                bottomItems.slice(0, 6).map(function(el){ return String(el.textContent||'').trim().slice(0,20); }).join('|'));
+              for (var i = 0; i < bottomItems.length; i++) {
+                var t = String(bottomItems[i].textContent || bottomItems[i].innerText || '').toLowerCase().trim();
+                if (t.indexOf('skanuj') >= 0 || t.indexOf('skan') >= 0 || t.indexOf('scan') >= 0 || t.indexOf('paragon') >= 0) {
+                  if (clickEl(bottomItems[i])) return 'bottom_text_scan';
                 }
               }
+              if (bottomItems.length >= 3 && clickEl(bottomItems[2])) return 'bottom_index_2';
+              if (bottomItems.length >= 2 && clickEl(bottomItems[1])) return 'bottom_index_1';
               return null;
             }
             if (window.__flutter2tiReceiptReady) {
@@ -764,9 +791,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
             }
             var path = String(location.pathname || '') + String(location.search || '');
             var onFm1 = path.indexOf('/fm/1') >= 0;
-            var navItems = collectBottomNavItems();
-            console.log('[FPK-JS] tab state before_switch path=', location.href, 'navItems=', navItems.length,
-              navItems.slice(0, 4).map(function(el){ return String(el.textContent||'').trim().slice(0,24); }).join('|'));
             try {
               if (window.$2TI) {
                 if (typeof $2TI.showFm === 'function') { $2TI.showFm(1); return '2ti_showFm'; }
@@ -774,10 +798,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 if (typeof $2TI.menuClick === 'function') { $2TI.menuClick(1); return '2ti_menuClick'; }
               }
             } catch(_) {}
-            var byText = clickScanByText(navItems);
-            if (byText) return byText;
-            if (navItems.length > 1 && clickEl(navItems[1])) return 'bottom_index_1';
-            if (navItems.length === 1 && clickEl(navItems[0])) return 'bottom_index_0';
+            var navHit = tryClickScanNav();
+            if (navHit) return navHit;
             if (!onFm1) {
               var hrefHits = document.querySelectorAll('a[href*="/fm/1"]');
               for (var j = 0; j < hrefHits.length; j++) {
@@ -797,8 +819,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
   }
 
-  Future<void> _waitFor2takePageReady() async {
-    const maxAttempts = 24;
+  Future<bool> _waitFor2takePageReady() async {
+    const maxAttempts = 36;
     String lastReason = 'wait';
     var tabSwitchAttempts = 0;
     final pendingHasRedirect = (_pendingScanUrl ?? '').toLowerCase().contains('redirectafterlogin');
@@ -807,7 +829,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
         final status = await _evaluate2takeScanPageStatus();
         if (status == 'ready') {
           if (i > 0) debugPrint('FPK: 2take scan page ready after ${i * 500}ms');
-          return;
+          return true;
         }
         lastReason = status.isEmpty ? 'wait' : status;
         final redirectGrace = pendingHasRedirect ? 8 : 2;
@@ -818,6 +840,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
           tabSwitchAttempts++;
           final switched = await _ensure2takeScanTabActive();
           debugPrint('FPK: tab switch attempt after ${i * 500}ms => $switched');
+          if (switched == 'bottom_index_0' ||
+              switched == 'none' ||
+              switched == 'await_spa' ||
+              switched == 'err') {
+            debugPrint('FPK: tab switch inconclusive ($switched), skipping further clicks');
+            tabSwitchAttempts = 99;
+          }
           await Future.delayed(const Duration(milliseconds: 1500));
           continue;
         }
@@ -827,7 +856,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
       } catch (_) {}
       await Future.delayed(const Duration(milliseconds: 500));
     }
-    debugPrint('FPK: 2take scan page ready timeout ($lastReason), dispatching anyway');
+    debugPrint('FPK: 2take scan page ready timeout ($lastReason), aborting dispatch');
+    return false;
   }
 
   Future<void> _maybeDispatchDeferredImage() async {
@@ -838,7 +868,15 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
     try {
       debugPrint('FPK: waiting for page ready before deferred dispatch');
-      await _waitFor2takePageReady();
+      final ready = await _waitFor2takePageReady();
+      if (!ready) {
+        debugPrint('FPK: deferred dispatch aborted — receipt module not ready, reloading scan page');
+        final controller = _inAppController;
+        if (controller != null) {
+          await _reloadWebViewAfterRendererCrash(controller);
+        }
+        return;
+      }
       _rendererCrashedDuringPick = false;
       debugPrint('FPK: dispatching deferred image => ${image.name}');
       await _dispatchPickedImage(image);
