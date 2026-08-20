@@ -665,12 +665,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
         _lastKnownUrl = currentStr;
       }
     } catch (_) {}
-    final raw = _pendingScanUrl ??
+    final pending = _pendingScanUrl;
+    final raw = pending ??
         _lastKnownUrl ??
         widget.initialUrl ??
         widget.config.webviewUrl;
     if (raw.isEmpty) return;
-    final url = _sanitize2takeReloadUrl(raw);
+    // Keep redirectAfterLogin in pending scan URL — it preserves scan-tab intent after cold reload.
+    final url = pending ?? _sanitize2takeReloadUrl(raw);
     debugPrint('[WEBVIEW] reloading after renderer crash: $url');
     try {
       await controller.loadUrl(urlRequest: URLRequest(url: WebUri(url)));
@@ -679,7 +681,38 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
   }
 
-  Future<String> _open2takeScanTab() async {
+  Future<String> _evaluate2takeScanPageStatus() async {
+    try {
+      final result = await _inAppController?.evaluateJavascript(source: r'''
+        (function(){
+          try {
+            var host = String(location.host || '').toLowerCase();
+            if (host.indexOf('2take') === -1) return 'ready';
+            var path = String(location.pathname || '') + String(location.search || '');
+            var onScanPath = path.indexOf('/fm/1') >= 0;
+            var footerSel = '#footer a, footer a, .footer a, .bottom-nav a, .tabbar a, [id*="footer"] a, [class*="footer"] a';
+            var footerLinks = document.querySelectorAll(footerSel);
+            var activeFooter = -1;
+            for (var i = 0; i < footerLinks.length; i++) {
+              var el = footerLinks[i];
+              var cls = String(el.className || '') + ' ' + String((el.parentElement && el.parentElement.className) || '');
+              if (/active|selected|current/i.test(cls)) { activeFooter = i; break; }
+            }
+            if (!onScanPath && activeFooter !== 1) return 'wait:not_scan_tab';
+            var inp = document.querySelector('input[type="file"]');
+            if (!inp) return 'wait:no_input';
+            if (!window.__flutter2tiReceiptReady) return 'wait:no_receipt';
+            return 'ready';
+          } catch(e) { return 'ready'; }
+        })()
+      ''');
+      return result?.toString() ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  Future<String> _ensure2takeScanTabActive() async {
     try {
       final result = await _inAppController?.evaluateJavascript(source: r'''
         (function(){
@@ -701,19 +734,38 @@ class _WebViewScreenState extends State<WebViewScreen> {
               if (!el || isFileTrigger(el)) return false;
               try { el.click(); return true; } catch(_) { return false; }
             }
-            var hrefHits = document.querySelectorAll('a[href*="/fm/1"]');
-            for (var i = 0; i < hrefHits.length; i++) {
-              if (clickEl(hrefHits[i])) return 'href_fm1';
+            function activeFooterIndex(links){
+              for (var i = 0; i < links.length; i++) {
+                var el = links[i];
+                var cls = String(el.className || '') + ' ' + String((el.parentElement && el.parentElement.className) || '');
+                if (/active|selected|current/i.test(cls)) return i;
+              }
+              return -1;
             }
+            var path = String(location.pathname || '') + String(location.search || '');
             var footerSel = '#footer a, footer a, .footer a, .bottom-nav a, .tabbar a, [id*="footer"] a, [class*="footer"] a';
             var footerLinks = document.querySelectorAll(footerSel);
+            var activeIdx = activeFooterIndex(footerLinks);
+            if (path.indexOf('/fm/1') >= 0 && (activeIdx === 1 || activeIdx < 0)) {
+              console.log('[FPK-JS] tab state already_scan path=', location.href, 'activeFooter=', activeIdx);
+              return 'already_scan';
+            }
+            console.log('[FPK-JS] tab state before_switch path=', location.href, 'activeFooter=', activeIdx);
             if (footerLinks.length > 1 && clickEl(footerLinks[1])) return 'footer_index_1';
+            if (window.$) {
+              try {
+                var $foot = window.$(footerSel);
+                if ($foot.length > 1 && clickEl($foot.get(1))) return 'jq_footer_index_1';
+              } catch(_) {}
+            }
+            var hrefHits = document.querySelectorAll('a[href*="/fm/1"]');
+            for (var j = 0; j < hrefHits.length; j++) {
+              if (clickEl(hrefHits[j])) return 'href_fm1';
+            }
             if (window.$) {
               try {
                 var $fm = window.$('a[href*="/fm/1"]').first();
                 if ($fm && $fm.length && clickEl($fm.get(0))) return 'jq_href_fm1';
-                var $foot = window.$(footerSel);
-                if ($foot.length > 1 && clickEl($foot.get(1))) return 'jq_footer_index_1';
               } catch(_) {}
             }
             return 'none';
@@ -721,10 +773,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
         })()
       ''');
       final status = result?.toString() ?? 'none';
-      debugPrint('FPK: open scan tab => $status');
+      debugPrint('FPK: ensure scan tab => $status');
       return status;
     } catch (e) {
-      debugPrint('FPK: open scan tab error: $e');
+      debugPrint('FPK: ensure scan tab error: $e');
       return 'err';
     }
   }
@@ -732,32 +784,22 @@ class _WebViewScreenState extends State<WebViewScreen> {
   Future<void> _waitFor2takePageReady() async {
     const maxAttempts = 40;
     String lastReason = 'wait';
-    var scanTabOpened = false;
+    var tabSwitchAttempted = false;
     for (var i = 0; i < maxAttempts; i++) {
       try {
-        final result = await _inAppController?.evaluateJavascript(source: r'''
-          (function(){
-            try {
-              var host = String(location.host || '').toLowerCase();
-              if (host.indexOf('2take') === -1) return 'ready';
-              var inp = document.querySelector('input[type="file"]');
-              if (!inp) return 'wait:no_input';
-              if (window.__flutter2tiReceiptReady) return 'ready';
-              return 'wait:no_receipt';
-            } catch(e) { return 'ready'; }
-          })()
-        ''');
-        final status = result?.toString() ?? '';
+        final status = await _evaluate2takeScanPageStatus();
         if (status == 'ready') {
           if (i > 0) debugPrint('FPK: 2take scan page ready after ${i * 500}ms');
-          await _open2takeScanTab();
-          await Future.delayed(const Duration(milliseconds: 300));
           return;
         }
         lastReason = status.isEmpty ? 'wait' : status;
-        if (!scanTabOpened && i >= 4) {
-          final opened = await _open2takeScanTab();
-          if (opened != 'none' && opened != 'err') scanTabOpened = true;
+        if (!tabSwitchAttempted &&
+            i >= 2 &&
+            (status == 'wait:not_scan_tab' || status == 'wait:no_input')) {
+          tabSwitchAttempted = true;
+          await _ensure2takeScanTabActive();
+          await Future.delayed(const Duration(milliseconds: 800));
+          continue;
         }
         if (i == 0 || i % 4 == 0) {
           debugPrint('FPK: waiting for scan page ($lastReason) t=${i * 500}ms');
@@ -766,7 +808,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
       await Future.delayed(const Duration(milliseconds: 500));
     }
     debugPrint('FPK: 2take scan page ready timeout ($lastReason), dispatching anyway');
-    await _open2takeScanTab();
+    if (!tabSwitchAttempted) await _ensure2takeScanTabActive();
   }
 
   Future<void> _maybeDispatchDeferredImage() async {
@@ -780,7 +822,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
       await _waitFor2takePageReady();
       _rendererCrashedDuringPick = false;
       debugPrint('FPK: dispatching deferred image => ${image.name}');
-      await _open2takeScanTab();
       await _dispatchPickedImage(image);
       _postDispatchGraceUntil = DateTime.now().add(const Duration(seconds: 60));
       _pendingScanUrl = null;
@@ -997,7 +1038,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
         if (image != null) {
           if (href.isNotEmpty) {
-            _pendingScanUrl = _sanitize2takeReloadUrl(href);
+            _pendingScanUrl = href;
           }
           await _dispatchPickedImageWhenReady(image, fromCamera: result == 'camera');
         }
