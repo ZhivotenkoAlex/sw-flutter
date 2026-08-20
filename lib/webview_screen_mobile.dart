@@ -16,6 +16,7 @@ import 'package:flutter/services.dart';
 import 'app_config.dart';
 import 'services/secure_config_service.dart';
 import 'services/mall_selection_storage.dart';
+import 'mall_selector_screen.dart';
 import 'flavor_config.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -72,6 +73,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
   bool _isDispatchingDeferred = false;
   DateTime? _postDispatchGraceUntil;
   String? _pendingScanUrl;
+  bool _wasLoggedIn = false;
+  bool _returningToSelector = false;
 
   static const int _pickImageQuality = 50;
   static const double _pickImageMaxSize = 1024;
@@ -620,7 +623,73 @@ class _WebViewScreenState extends State<WebViewScreen> {
     return lower.contains('/fm/1') || lower.contains('redirectafterlogin');
   }
 
-  bool _shouldPersistWebViewUrl(String url) => !_isTransientScanUrl(url);
+  bool _shouldPersistWebViewUrl(String url) =>
+      MallSelectionStorage.isRestorableWebViewUrl(url);
+
+  SecureAppConfig? get _secureConfig =>
+      widget.config is SecureAppConfig ? widget.config as SecureAppConfig : null;
+
+  bool _canReturnToMallSelector(SecureAppConfig config) =>
+      config.showSeletorPage && config.selectorItems.isNotEmpty;
+
+  bool _isAccountLogoutUrl(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return false;
+    if (uri.host.toLowerCase() != 'login.2take.it') return false;
+    final path = uri.path.toLowerCase();
+    return path.startsWith('/login') || path.startsWith('/signup');
+  }
+
+  Future<void> _handleAccountLogout({String? uid}) async {
+    if (_returningToSelector) return;
+    final config = _secureConfig;
+    if (config == null || !_canReturnToMallSelector(config)) return;
+
+    _returningToSelector = true;
+    _wasLoggedIn = false;
+    _pendingScanUrl = null;
+    _deferredPickedImage = null;
+
+    debugPrint('[WEBVIEW] account logout → mall selector');
+
+    try {
+      if (uid != null && uid.isNotEmpty) {
+        await FirebaseMessagingService.unregisterToken(userId: uid);
+      }
+    } catch (e) {
+      debugPrint('[WEBVIEW] logout unregister error: $e');
+    }
+
+    try {
+      await MallSelectionStorage.clearWebViewUrl(config.companyId);
+    } catch (e) {
+      debugPrint('[WEBVIEW] logout clear session error: $e');
+    }
+
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => MallSelectorScreen(config: config)),
+      (route) => false,
+    );
+  }
+
+  Future<bool> _maybeReturnToSelectorAfterLogout(String url) async {
+    if (!_wasLoggedIn || !_isAccountLogoutUrl(url)) return false;
+    await _handleAccountLogout();
+    return true;
+  }
+
+  Future<void> _persistUrlAfterLogin(InAppWebViewController controller) async {
+    try {
+      final currentUrl = await controller.getUrl();
+      final urlStr = currentUrl?.toString() ?? '';
+      if (urlStr.isNotEmpty) {
+        await _persistWebViewUrl(urlStr);
+      }
+    } catch (e) {
+      debugPrint('[WEBVIEW] persist after login error: $e');
+    }
+  }
 
   String _sanitize2takeReloadUrl(String url) {
     return url.replaceAll(
@@ -2869,8 +2938,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 try {
                   final uid = (args.isNotEmpty ? args[0] : '')?.toString() ?? '';
                   debugPrint('[WEBVIEW] logoutPush uid=' + uid);
-                  if (uid.isEmpty) return {'error': 'no_user'};
-                  await FirebaseMessagingService.unregisterToken(userId: uid);
+                  await _handleAccountLogout(uid: uid.isEmpty ? null : uid);
                   debugPrint('[WEBVIEW] logoutPush done uid=' + uid);
                   return {'ok': true};
                 } catch (e) { return {'error': e.toString()}; }
@@ -2925,10 +2993,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 controller.evaluateJavascript(
                   source: 'try { window.__flutter2tiLoggedIn = true; } catch(e) {}',
                 );
+                if (mounted) _wasLoggedIn = true;
               } else if (text.contains('loaded2ti')) {
                 controller.evaluateJavascript(
                   source: 'try { window.__flutter2tiPageLoaded = true; } catch(e) {}',
                 );
+                _persistUrlAfterLogin(controller);
               }
             } catch (_) {}
           },
@@ -2946,6 +3016,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
           onLoadStop: (controller, url) async {
             final urlStr = url?.toString() ?? '';
             if (urlStr.isNotEmpty) _lastKnownUrl = urlStr;
+            if (await _maybeReturnToSelectorAfterLogout(urlStr)) return;
             await _injectPermissionOverrides();
             try { await controller.evaluateJavascript(source: _app2tiBridgeJs); } catch (_) {}
             await _persistWebViewUrl(urlStr);

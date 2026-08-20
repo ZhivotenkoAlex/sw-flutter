@@ -121,7 +121,12 @@ void main() async {
   if (config != null && config.showSeletorPage) {
     try {
       restoredWebViewUrl = await MallSelectionStorage.getWebViewUrl(config.companyId);
-      if (restoredWebViewUrl != null) {
+      if (restoredWebViewUrl != null &&
+          !MallSelectionStorage.isRestorableWebViewUrl(restoredWebViewUrl)) {
+        print('[Main] Ignoring non-restorable WebView session: $restoredWebViewUrl');
+        restoredWebViewUrl = null;
+        await MallSelectionStorage.clearWebViewUrl(config.companyId);
+      } else if (restoredWebViewUrl != null) {
         print('[Main] Restoring WebView session: $restoredWebViewUrl');
       }
     } catch (e) {

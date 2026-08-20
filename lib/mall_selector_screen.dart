@@ -55,7 +55,12 @@ class _MallSelectorScreenState extends State<MallSelectorScreen> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: true,
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          SystemNavigator.pop();
+        }
+      },
       child: Scaffold(
         backgroundColor: _backgroundColor,
         body: SafeArea(
@@ -115,13 +120,14 @@ class _MallSelectorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          splashColor: Colors.white24,
+          highlightColor: Colors.white12,
           child: SizedBox(
             height: 130,
             width: double.infinity,
