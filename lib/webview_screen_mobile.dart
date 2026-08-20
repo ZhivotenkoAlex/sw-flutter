@@ -688,23 +688,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
           try {
             var host = String(location.host || '').toLowerCase();
             if (host.indexOf('2take') === -1) return 'ready';
-            var path = String(location.pathname || '') + String(location.search || '');
-            var onScanPath = path.indexOf('/fm/1') >= 0;
-            var footerSel = '#footer a, footer a, .footer a, .bottom-nav a, .tabbar a, [id*="footer"] a, [class*="footer"] a, .v-bottom-navigation a, .v-bottom-navigation .v-btn, nav.bottom a, [class*="bottom-nav"] a, [class*="tab-bar"] a';
-            var footerLinks = document.querySelectorAll(footerSel);
-            var activeFooter = -1;
-            for (var i = 0; i < footerLinks.length; i++) {
-              var el = footerLinks[i];
-              var cls = String(el.className || '') + ' ' + String((el.parentElement && el.parentElement.className) || '');
-              if (/active|selected|current|v-btn--active/i.test(cls)) { activeFooter = i; break; }
-            }
-            if (activeFooter === 0) return 'wait:not_scan_tab';
-            if (!onScanPath && activeFooter !== 1) return 'wait:not_scan_tab';
             var inp = document.querySelector('input[type="file"]');
             if (!inp) return 'wait:no_input';
             if (window.__flutter2tiReceiptReady) return 'ready';
-            if (activeFooter !== 1 && !onScanPath) return 'wait:not_scan_tab';
-            return 'wait:no_receipt';
+            if (window.__flutter2tiPageLoaded && window.__flutter2tiLoggedIn && inp) {
+              return 'wait:no_receipt';
+            }
+            return 'wait:page';
           } catch(e) { return 'ready'; }
         })()
       ''');
@@ -734,53 +724,67 @@ class _WebViewScreenState extends State<WebViewScreen> {
             }
             function clickEl(el){
               if (!el || isFileTrigger(el)) return false;
-              try { el.click(); return true; } catch(_) { return false; }
+              try {
+                el.dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true, view:window}));
+                el.click();
+                return true;
+              } catch(_) { return false; }
             }
-            function activeFooterIndex(links){
-              for (var i = 0; i < links.length; i++) {
-                var el = links[i];
-                var cls = String(el.className || '') + ' ' + String((el.parentElement && el.parentElement.className) || '');
-                if (/active|selected|current|v-btn--active/i.test(cls)) return i;
+            function collectBottomNavItems(){
+              var out = [];
+              var seen = new Set();
+              function add(el){
+                if (!el || seen.has(el)) return;
+                try {
+                  var r = el.getBoundingClientRect();
+                  if (!r.width && !r.height) return;
+                  if (r.top < window.innerHeight * 0.55) return;
+                } catch(_) {}
+                seen.add(el);
+                out.push(el);
               }
-              return -1;
+              var roots = document.querySelectorAll('.v-bottom-navigation, .v-bottom-navigation__content, [class*="bottom-navigation"], footer, #footer, [class*="tab-bar"], nav, [class*="menu-bar"]');
+              for (var r = 0; r < roots.length; r++) {
+                roots[r].querySelectorAll('button, .v-btn, a, [role="tab"], [role="button"], .v-bottom-navigation-item, li').forEach(add);
+              }
+              return out;
             }
-            function clickScanByText(links){
-              for (var i = 0; i < links.length; i++) {
-                var t = String(links[i].textContent || links[i].innerText || '').toLowerCase();
+            function clickScanByText(items){
+              for (var i = 0; i < items.length; i++) {
+                var t = String(items[i].textContent || items[i].innerText || '').toLowerCase();
                 if (t.indexOf('skan') >= 0 || t.indexOf('scan') >= 0 || t.indexOf('paragon') >= 0) {
-                  if (clickEl(links[i])) return 'footer_text_scan';
+                  if (clickEl(items[i])) return 'bottom_text_scan';
                 }
               }
               return null;
             }
-            var footerSel = '#footer a, footer a, .footer a, .bottom-nav a, .tabbar a, [id*="footer"] a, [class*="footer"] a, .v-bottom-navigation a, .v-bottom-navigation .v-btn, nav.bottom a, [class*="bottom-nav"] a, [class*="tab-bar"] a';
-            var footerLinks = document.querySelectorAll(footerSel);
-            var activeIdx = activeFooterIndex(footerLinks);
-            if (window.__flutter2tiReceiptReady || activeIdx === 1) {
-              console.log('[FPK-JS] tab state already_scan path=', location.href, 'activeFooter=', activeIdx, 'receipt=', !!window.__flutter2tiReceiptReady);
+            if (window.__flutter2tiReceiptReady) {
+              console.log('[FPK-JS] tab state already_scan receipt=true');
               return 'already_scan';
             }
-            console.log('[FPK-JS] tab state before_switch path=', location.href, 'activeFooter=', activeIdx);
-            var byText = clickScanByText(footerLinks);
+            var path = String(location.pathname || '') + String(location.search || '');
+            var onFm1 = path.indexOf('/fm/1') >= 0;
+            var navItems = collectBottomNavItems();
+            console.log('[FPK-JS] tab state before_switch path=', location.href, 'navItems=', navItems.length,
+              navItems.slice(0, 4).map(function(el){ return String(el.textContent||'').trim().slice(0,24); }).join('|'));
+            try {
+              if (window.$2TI) {
+                if (typeof $2TI.showFm === 'function') { $2TI.showFm(1); return '2ti_showFm'; }
+                if (typeof $2TI.openMenuItem === 'function') { $2TI.openMenuItem(1); return '2ti_openMenuItem'; }
+                if (typeof $2TI.menuClick === 'function') { $2TI.menuClick(1); return '2ti_menuClick'; }
+              }
+            } catch(_) {}
+            var byText = clickScanByText(navItems);
             if (byText) return byText;
-            if (footerLinks.length > 1 && clickEl(footerLinks[1])) return 'footer_index_1';
-            if (window.$) {
-              try {
-                var $foot = window.$(footerSel);
-                if ($foot.length > 1 && clickEl($foot.get(1))) return 'jq_footer_index_1';
-              } catch(_) {}
+            if (navItems.length > 1 && clickEl(navItems[1])) return 'bottom_index_1';
+            if (navItems.length === 1 && clickEl(navItems[0])) return 'bottom_index_0';
+            if (!onFm1) {
+              var hrefHits = document.querySelectorAll('a[href*="/fm/1"]');
+              for (var j = 0; j < hrefHits.length; j++) {
+                if (clickEl(hrefHits[j])) return 'href_fm1';
+              }
             }
-            var hrefHits = document.querySelectorAll('a[href*="/fm/1"]');
-            for (var j = 0; j < hrefHits.length; j++) {
-              if (clickEl(hrefHits[j])) return 'href_fm1';
-            }
-            if (window.$) {
-              try {
-                var $fm = window.$('a[href*="/fm/1"]').first();
-                if ($fm && $fm.length && clickEl($fm.get(0))) return 'jq_href_fm1';
-              } catch(_) {}
-            }
-            return 'none';
+            return onFm1 ? 'await_spa' : 'none';
           } catch(e) { return 'err'; }
         })()
       ''');
@@ -794,10 +798,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   Future<void> _waitFor2takePageReady() async {
-    const maxAttempts = 30;
+    const maxAttempts = 24;
     String lastReason = 'wait';
     var tabSwitchAttempts = 0;
-    const maxTabSwitchAttempts = 2;
+    final pendingHasRedirect = (_pendingScanUrl ?? '').toLowerCase().contains('redirectafterlogin');
     for (var i = 0; i < maxAttempts; i++) {
       try {
         final status = await _evaluate2takeScanPageStatus();
@@ -806,15 +810,15 @@ class _WebViewScreenState extends State<WebViewScreen> {
           return;
         }
         lastReason = status.isEmpty ? 'wait' : status;
-        final shouldSwitch = tabSwitchAttempts < maxTabSwitchAttempts &&
-            i >= 2 &&
-            (status == 'wait:not_scan_tab' ||
-                status == 'wait:no_input' ||
-                (status == 'wait:no_receipt' && i >= 4));
+        final redirectGrace = pendingHasRedirect ? 8 : 2;
+        final shouldSwitch = tabSwitchAttempts == 0 &&
+            i >= redirectGrace &&
+            (status == 'wait:no_receipt' || status == 'wait:no_input' || status == 'wait:page');
         if (shouldSwitch) {
           tabSwitchAttempts++;
-          await _ensure2takeScanTabActive();
-          await Future.delayed(const Duration(milliseconds: 1000));
+          final switched = await _ensure2takeScanTabActive();
+          debugPrint('FPK: tab switch attempt after ${i * 500}ms => $switched');
+          await Future.delayed(const Duration(milliseconds: 1500));
           continue;
         }
         if (i == 0 || i % 4 == 0) {
@@ -824,9 +828,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
       await Future.delayed(const Duration(milliseconds: 500));
     }
     debugPrint('FPK: 2take scan page ready timeout ($lastReason), dispatching anyway');
-    if (tabSwitchAttempts < maxTabSwitchAttempts) {
-      await _ensure2takeScanTabActive();
-    }
   }
 
   Future<void> _maybeDispatchDeferredImage() async {
