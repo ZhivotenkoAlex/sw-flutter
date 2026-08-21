@@ -18,6 +18,7 @@ import 'services/secure_config_service.dart';
 import 'services/mall_selection_storage.dart';
 import 'mall_selector_screen.dart';
 import 'flavor_config.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 Future<NavigationActionPolicy> _navigationPolicyForExternalSchemes(String url) async {
@@ -45,6 +46,16 @@ const Map<String, String> _googleAuthClientIds = {
   'kazimierz-club-new': '159120615271-s2fbutrvvgk39rq71fafmeadksmk4g4d.apps.googleusercontent.com',
   'polbau-demo': '235700920701-0gh8pnikbhue765jjmrmhjiq3l4gqo6c.apps.googleusercontent.com',
 };
+
+/// iOS native OAuth client IDs (must match bundle + Firebase iOS app)
+const Map<String, String> _googleAuthIosClientIds = {
+  'galeria-kazimierz': '839029981684-kq8kc6rt5kkfqbameeui336gg5mipn55.apps.googleusercontent.com',
+  'kazimierz-club-new': '159120615271-9bm2apos0nn46hk1n56vlm611raqc1fb.apps.googleusercontent.com',
+  'polbau-demo': '235700920701-l8mf0rra93e3e11pci4tgptqj5g28lla.apps.googleusercontent.com',
+};
+
+const String _polbauProdIosClientId =
+    '235700920701-k4b8ekbtt3n9242hqlf77sbcr9gc6ksf.apps.googleusercontent.com';
 
 class WebViewScreen extends StatefulWidget {
   final AppConfig config;
@@ -90,6 +101,19 @@ class _WebViewScreenState extends State<WebViewScreen> {
     const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
     final random = Random.secure();
     return List.generate(length, (_) => charset[random.nextInt(charset.length)]).join();
+  }
+
+  Future<String?> _resolveIosGoogleClientId(String authCompanyId) async {
+    if (!Platform.isIOS) return null;
+
+    if (authCompanyId == 'polbau-demo') {
+      final packageInfo = await PackageInfo.fromPlatform();
+      return packageInfo.packageName == 'com.polbau.polbau'
+          ? _polbauProdIosClientId
+          : _googleAuthIosClientIds['polbau-demo'];
+    }
+
+    return _googleAuthIosClientIds[authCompanyId];
   }
 
   String get _app2tiBridgeJs => '''
@@ -2710,9 +2734,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
                             _googleAuthClientIds['galeria-kazimierz']!; // fallback to default
             
             final flavorInfo = FlavorConfig.isInitialized ? FlavorConfig.instance.flavor.toString() : 'unknown';
-            debugPrint('[WEBVIEW] Flavor: $flavorInfo, Company (UI): $companyId, Company (Google Auth): $authCompanyId, Google Auth client: ${serverClientId.substring(0, 20)}...');
+            final iosClientId = await _resolveIosGoogleClientId(authCompanyId);
+            debugPrint('[WEBVIEW] Flavor: $flavorInfo, Company (UI): $companyId, Company (Google Auth): $authCompanyId, Google Auth client: ${serverClientId.substring(0, 20)}..., iOS client: ${iosClientId?.substring(0, 20) ?? 'none'}...');
             
             _googleSignIn = GoogleSignIn(
+              clientId: iosClientId,
               serverClientId: serverClientId,
               scopes: ['email', 'profile'],
             );
