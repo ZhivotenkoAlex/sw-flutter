@@ -4,5 +4,7 @@
 <dict>
 	<key>CFBundleDisplayName</key>
 	<string>Moja Galeria</string>
+	<key>GIDClientID</key>
+	<string>235700920701-l8mf0rra93e3e11pci4tgptqj5g28lla.apps.googleusercontent.com</string>
 </dict>
 </plist>

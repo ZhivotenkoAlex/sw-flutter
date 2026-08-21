@@ -48,6 +48,12 @@
 				<string>com.googleusercontent.apps.235700920701-k4b8ekbtt3n9242hqlf77sbcr9gc6ksf</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.235700920701-l8mf0rra93e3e11pci4tgptqj5g28lla</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
