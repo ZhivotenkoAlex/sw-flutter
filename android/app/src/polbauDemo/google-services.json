@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "235700920701-em490jkv89q93gdpd3d8cbet6fgaoh15.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.polbau.polbau",
+            "certificate_hash": "62999ab533631e224b1a978aae9b5c63fe625a5e"
+          }
+        },
+        {
           "client_id": "235700920701-io5jfdngv6tosdgabj21mgem0vm4776p.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
@@ -21,6 +29,42 @@
             "certificate_hash": "52e33b57ed7f464c2d3cc297c098ce6e458f4577"
           }
         },
+        {
+          "client_id": "235700920701-0gh8pnikbhue765jjmrmhjiq3l4gqo6c.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA2GGge0HBOwDJkOqc3o_Dv4vLLH18wCZ0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "235700920701-0gh8pnikbhue765jjmrmhjiq3l4gqo6c.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "235700920701-k4b8ekbtt3n9242hqlf77sbcr9gc6ksf.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.polbau.polbau"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:235700920701:android:7d5f9a2d6c923580e2ec14",
+        "android_client_info": {
+          "package_name": "pl.a2ti.mojagaleria"
+        }
+      },
+      "oauth_client": [
         {
           "client_id": "235700920701-0gh8pnikbhue765jjmrmhjiq3l4gqo6c.apps.googleusercontent.com",
           "client_type": 3

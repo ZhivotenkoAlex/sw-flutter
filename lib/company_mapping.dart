@@ -63,6 +63,7 @@ class CompanyMapping {
     const Map<String, String> packageMappings = {
       'pl.a2ti.galeriakazimierz': 'galeria-kazimierz',
       'com.skanujwygrywaj.skanuj_wygrywaj': 'kazimierz-club-new',
+      'pl.a2ti.mojagaleria': 'polbau-demo',
       'com.polbau.polbau': 'polbau-demo',
       'com.polbau.polbau-demo': 'polbau-demo',
       'com.wislanka.wislanka': 'wislanka',
