@@ -47,10 +47,10 @@
               "client_type": 3
             },
             {
-              "client_id": "235700920701-k4b8ekbtt3n9242hqlf77sbcr9gc6ksf.apps.googleusercontent.com",
+              "client_id": "235700920701-0rqtieqdajfhgdh6jqhnsm8i7eoah887.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.polbau.polbau"
+                "bundle_id": "pl.2takeit.mojagaleria"
               }
             }
           ]
@@ -65,6 +65,14 @@
         }
       },
       "oauth_client": [
+        {
+          "client_id": "235700920701-c0fqltjsq0u4eb0igshspin6t8ug8jia.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "pl.a2ti.mojagaleria",
+            "certificate_hash": "52e33b57ed7f464c2d3cc297c098ce6e458f4577"
+          }
+        },
         {
           "client_id": "235700920701-0gh8pnikbhue765jjmrmhjiq3l4gqo6c.apps.googleusercontent.com",
           "client_type": 3
@@ -83,10 +91,10 @@
               "client_type": 3
             },
             {
-              "client_id": "235700920701-k4b8ekbtt3n9242hqlf77sbcr9gc6ksf.apps.googleusercontent.com",
+              "client_id": "235700920701-0rqtieqdajfhgdh6jqhnsm8i7eoah887.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.polbau.polbau"
+                "bundle_id": "pl.2takeit.mojagaleria"
               }
             }
           ]
