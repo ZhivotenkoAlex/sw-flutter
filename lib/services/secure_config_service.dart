@@ -5,6 +5,7 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../app_config.dart';
+import '../models/fcm_token_gesture_corner.dart';
 import '../models/selector_item.dart';
 
 /// Secure configuration loaded from Firestore
@@ -17,6 +18,7 @@ class SecureAppConfig extends AppConfig {
   final String backendUrl; // Backend URL for API calls
   final bool showSeletorPage;
   final List<SelectorItem> selectorItems;
+  final FcmTokenGestureCorner fcmTokenGestureCorner;
 
   SecureAppConfig({
     required super.webviewUrl,
@@ -31,6 +33,7 @@ class SecureAppConfig extends AppConfig {
     required this.backendUrl,
     this.showSeletorPage = false,
     this.selectorItems = const [],
+    this.fcmTokenGestureCorner = FcmTokenGestureCorner.topRight,
   });
 
   factory SecureAppConfig.fromFirestore(DocumentSnapshot doc) {
@@ -53,6 +56,9 @@ class SecureAppConfig extends AppConfig {
       backendUrl: backendUrl,
       showSeletorPage: data['showSeletorPage'] as bool? ?? false,
       selectorItems: _parseSelectorItems(data['selectorItems']),
+      fcmTokenGestureCorner: FcmTokenGestureCorner.fromString(
+        data['fcmTokenGestureCorner'] as String?,
+      ),
     );
   }
 
@@ -70,6 +76,9 @@ class SecureAppConfig extends AppConfig {
       backendUrl: json['backendUrl'] as String,
       showSeletorPage: json['showSeletorPage'] as bool? ?? false,
       selectorItems: _parseSelectorItems(json['selectorItems']),
+      fcmTokenGestureCorner: FcmTokenGestureCorner.fromString(
+        json['fcmTokenGestureCorner'] as String?,
+      ),
     );
   }
 
@@ -95,6 +104,7 @@ class SecureAppConfig extends AppConfig {
     baseJson['backendUrl'] = backendUrl;
     baseJson['showSeletorPage'] = showSeletorPage;
     baseJson['selectorItems'] = selectorItems.map((item) => item.toJson()).toList();
+    baseJson['fcmTokenGestureCorner'] = fcmTokenGestureCorner.toFirestoreValue();
     return baseJson;
   }
 
