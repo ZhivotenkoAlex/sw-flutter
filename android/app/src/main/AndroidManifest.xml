@@ -15,8 +15,6 @@
     <!-- Storage permissions for service workers and file uploads -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     
     <!-- Location permissions (if needed by the web app) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />

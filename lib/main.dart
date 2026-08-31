@@ -192,7 +192,9 @@ class MyApp extends StatelessWidget {
         );
     
     return MaterialApp(
-      title: isLegacyMode ? 'Skanuj Wygrywaj' : 'Skanuj Wygrywaj New',
+      title: FlavorConfig.isInitialized && FlavorConfig.instance.flavor == FlavorType.polbauDemo
+          ? FlavorConfig.instance.name
+          : (isLegacyMode ? 'Skanuj Wygrywaj' : 'Skanuj Wygrywaj New'),
       theme: appTheme,
       home: config != null
         ? _buildHomeScreen(config!, restoredWebViewUrl)

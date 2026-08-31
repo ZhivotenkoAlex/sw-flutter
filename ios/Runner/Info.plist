@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Skanuj Wygrywaj</string>
+	<string>$(INFOPLIST_KEY_CFBundleDisplayName)</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -45,7 +45,7 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.235700920701-k4b8ekbtt3n9242hqlf77sbcr9gc6ksf</string>
+				<string>com.googleusercontent.apps.235700920701-0rqtieqdajfhgdh6jqhnsm8i7eoah887</string>
 			</array>
 		</dict>
 		<dict>
@@ -63,8 +63,10 @@
 	<string>287981d5a80b70d2d89de443c84a8fe8</string>
 	<key>FacebookDisplayName</key>
 	<string>skanuj_wygrywaj</string>
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<false/>
 	<key>GIDClientID</key>
-	<string>839029981684-kq8kc6rt5kkfqbameeui336gg5mipn55.apps.googleusercontent.com</string>
+	<string>$(INFOPLIST_KEY_GIDClientID)</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>fbapi</string>
@@ -87,8 +89,6 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
-	<key>FirebaseAppDelegateProxyEnabled</key>
-	<false/>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

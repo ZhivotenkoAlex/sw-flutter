@@ -1,5 +1,5 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release-polbaudemo.xcconfig"
 #include "Generated.xcconfig"
 #include "../Runner/polbauDemo/facebook.xcconfig"
-PRODUCT_BUNDLE_IDENTIFIER = com.polbau.polbau
+PRODUCT_BUNDLE_IDENTIFIER = pl.2takeit.mojagaleria
 FLUTTER_FLAVOR = polbauDemo
