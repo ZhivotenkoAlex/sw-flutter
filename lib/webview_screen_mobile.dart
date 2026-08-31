@@ -18,6 +18,7 @@ import 'services/secure_config_service.dart';
 import 'services/mall_selection_storage.dart';
 import 'mall_selector_screen.dart';
 import 'flavor_config.dart';
+import 'models/fcm_token_gesture_corner.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -653,6 +654,24 @@ class _WebViewScreenState extends State<WebViewScreen> {
   SecureAppConfig? get _secureConfig =>
       widget.config is SecureAppConfig ? widget.config as SecureAppConfig : null;
 
+  FcmTokenGestureCorner get _fcmTokenGestureCorner =>
+      _secureConfig?.fcmTokenGestureCorner ?? FcmTokenGestureCorner.topRight;
+
+  bool _isInSecretTapArea(Offset globalPosition, BuildContext context) {
+    final media = MediaQuery.of(context);
+    final screenWidth = media.size.width;
+    final topLimit = media.padding.top + 100;
+
+    if (globalPosition.dy > topLimit) return false;
+
+    switch (_fcmTokenGestureCorner) {
+      case FcmTokenGestureCorner.topLeft:
+        return globalPosition.dx <= 100;
+      case FcmTokenGestureCorner.topRight:
+        return globalPosition.dx >= screenWidth - 100;
+    }
+  }
+
   bool _canReturnToMallSelector(SecureAppConfig config) =>
       config.showSeletorPage && config.selectorItems.isNotEmpty;
 
@@ -1242,35 +1261,25 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   void _handleSecretTap(Offset globalPosition, BuildContext context) {
-    // Convert global position to local position relative to Scaffold
-    final RenderBox? box = context.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    
-    final localPosition = box.globalToLocal(globalPosition);
-    final screenWidth = box.size.width;
-    
-    // Check if tap is in absolute top-right corner (100x100 pixels from top-right of Scaffold)
-    // This works regardless of SafeArea - we check absolute position
-    final distanceFromRight = screenWidth - localPosition.dx;
-    if (distanceFromRight > 100 || localPosition.dy > 100) {
+    if (!_isInSecretTapArea(globalPosition, context)) {
       _secretTapCount = 0;
       _lastTapTime = null;
       return;
     }
-    
+
     final now = DateTime.now();
-    
+
     // Reset if too much time passed since last tap
     if (_lastTapTime != null && now.difference(_lastTapTime!) > _secretTapTimeout) {
       _secretTapCount = 0;
     }
-    
+
     _secretTapCount++;
     _lastTapTime = now;
-    
+
     // Log in release mode too (using print instead of debugPrint)
-    print('[SECRET] Tap count: $_secretTapCount/$_secretTapThreshold at (${localPosition.dx}, ${localPosition.dy})');
-    
+    print('[SECRET] corner=${_fcmTokenGestureCorner.name} tap count: $_secretTapCount/$_secretTapThreshold at (${globalPosition.dx}, ${globalPosition.dy})');
+
     if (_secretTapCount >= _secretTapThreshold) {
       _secretTapCount = 0;
       _lastTapTime = null;
@@ -1338,7 +1347,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
     final String modeLabel = isLegacyMode ? 'Legacy' : 'Modern';
     final Color modeColor = isLegacyMode ? Colors.blue : Colors.deepPurple;
     
-    print('[WebViewScreen] Loading $modeLabel mode, URL: $initialUrl');
+    print('[WebViewScreen] Loading $modeLabel mode, URL: $initialUrl, fcmTokenGestureCorner: ${_fcmTokenGestureCorner.name}');
     
     return Scaffold(
       body: GestureDetector(
@@ -3309,11 +3318,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   ), // Expanded
                 ], // children of Column
               ), // Column
-              // Invisible tap area for secret gesture (top-right corner)
+              // Invisible tap area for secret gesture (corner from Firestore config)
               // GestureDetector on Scaffold body handles taps, this is just a visual marker
               Positioned(
                 top: 0,
-                right: 0,
+                left: _fcmTokenGestureCorner == FcmTokenGestureCorner.topLeft ? 0 : null,
+                right: _fcmTokenGestureCorner == FcmTokenGestureCorner.topRight ? 0 : null,
                 child: Container(
                   width: 100,
                   height: 100,

@@ -56,9 +56,7 @@ class SecureAppConfig extends AppConfig {
       backendUrl: backendUrl,
       showSeletorPage: data['showSeletorPage'] as bool? ?? false,
       selectorItems: _parseSelectorItems(data['selectorItems']),
-      fcmTokenGestureCorner: FcmTokenGestureCorner.fromString(
-        data['fcmTokenGestureCorner'] as String?,
-      ),
+      fcmTokenGestureCorner: _parseGestureCorner(data),
     );
   }
 
@@ -76,9 +74,7 @@ class SecureAppConfig extends AppConfig {
       backendUrl: json['backendUrl'] as String,
       showSeletorPage: json['showSeletorPage'] as bool? ?? false,
       selectorItems: _parseSelectorItems(json['selectorItems']),
-      fcmTokenGestureCorner: FcmTokenGestureCorner.fromString(
-        json['fcmTokenGestureCorner'] as String?,
-      ),
+      fcmTokenGestureCorner: _parseGestureCorner(json),
     );
   }
 
@@ -89,6 +85,25 @@ class SecureAppConfig extends AppConfig {
         .map((item) => SelectorItem.fromMap(Map<String, dynamic>.from(item)))
         .where((item) => item.redirectionUrl.isNotEmpty)
         .toList();
+  }
+
+  static FcmTokenGestureCorner _parseGestureCorner(Map<String, dynamic> data) {
+    final direct = data['fcmTokenGestureCorner'] as String?;
+    if (direct != null && direct.isNotEmpty) {
+      return FcmTokenGestureCorner.fromString(direct);
+    }
+
+    for (final key in ['firebaseConfigAndroid', 'firebaseConfigIOS']) {
+      final nested = data[key];
+      if (nested is Map) {
+        final nestedValue = nested['fcmTokenGestureCorner'] as String?;
+        if (nestedValue != null && nestedValue.isNotEmpty) {
+          return FcmTokenGestureCorner.fromString(nestedValue);
+        }
+      }
+    }
+
+    return FcmTokenGestureCorner.topRight;
   }
 
   @override
