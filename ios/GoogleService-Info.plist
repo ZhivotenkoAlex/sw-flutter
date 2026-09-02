@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>235700920701-0rqtieqdajfhgdh6jqhnsm8i7eoah887.apps.googleusercontent.com</string>
+	<string>235700920701-l8mf0rra93e3e11pci4tgptqj5g28lla.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.235700920701-0rqtieqdajfhgdh6jqhnsm8i7eoah887</string>
+	<string>com.googleusercontent.apps.235700920701-l8mf0rra93e3e11pci4tgptqj5g28lla</string>
 	<key>ANDROID_CLIENT_ID</key>
 	<string>235700920701-em490jkv89q93gdpd3d8cbet6fgaoh15.apps.googleusercontent.com</string>
 	<key>API_KEY</key>
@@ -15,7 +15,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>pl.2takeit.mojagaleria</string>
+	<string>com.polbau.polbau-demo</string>
 	<key>PROJECT_ID</key>
 	<string>polbau-4e707</string>
 	<key>STORAGE_BUCKET</key>
@@ -31,6 +31,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:235700920701:ios:1f0cdeda4fc09623e2ec14</string>
+	<string>1:235700920701:ios:23d2392b2258ba84e2ec14</string>
 </dict>
 </plist>

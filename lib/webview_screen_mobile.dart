@@ -1519,37 +1519,69 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       } catch(_) {}
                     }, true);
 
-                // Intercept Apple sign-in button clicks and open Apple's OAuth URL expected by backend
+                // Intercept Apple sign-in on iOS only (button hidden on Android)
                 try {
+                  var useNativeApple = ${Platform.isIOS};
+                  if (useNativeApple) {
                   document.addEventListener('click', function(e){
                     try {
                       var t = e.target;
-                      var el = (t && t.closest) ? t.closest('button, a, div, span') : t;
-                      var txt = (el && (el.innerText || el.textContent || '')).toLowerCase();
-                      var aria = String((el && el.getAttribute && el.getAttribute('aria-label')) || '').toLowerCase();
-                      var cls = String((el && el.className) || '').toLowerCase();
-                      var isAppleBtn = /\bapple\b/.test(txt) || /\bapple\b/.test(aria) || /apple/.test(cls);
+                      var el = (t && t.closest) ? t.closest('button, a, [data-provider="apple"], [class*="apple" i], [aria-label*="apple" i]') : t;
+                      if (!el) return;
+                      var txt = (el.innerText || el.textContent || '').toLowerCase();
+                      var aria = String((el.getAttribute && el.getAttribute('aria-label')) || '').toLowerCase();
+                      var cls = String(el.className || '').toLowerCase();
+                      var provider = String((el.getAttribute && el.getAttribute('data-provider')) || '').toLowerCase();
+                      var isAppleBtn = provider === 'apple' || /\bapple\b/.test(txt) || /\bapple\b/.test(aria) || /apple/.test(cls);
+                      if (!isAppleBtn) {
+                        var parent = el.closest && el.closest('button, a, [role="button"]');
+                        if (parent) {
+                          var ptxt = (parent.innerText || parent.textContent || '').toLowerCase();
+                          isAppleBtn = /\bapple\b/.test(ptxt);
+                        }
+                      }
                       if (!isAppleBtn) return;
+
+                      var disabledByClass = false;
+                      try { disabledByClass = !!(el.closest && el.closest('.no-pointer-events')); } catch(_) {}
+                      if (disabledByClass) {
+                        try {
+                          if (!window.__flutterTriggeringAgreement) {
+                            window.__flutterTriggeringAgreement = true;
+                            tryTriggerAgreementError();
+                            setTimeout(function(){ window.__flutterTriggeringAgreement = false; }, 50);
+                          }
+                        } catch(_) {}
+                        return;
+                      }
+
+                      var agreed = (function(){
+                        try {
+                          var cb = document.querySelector('.regulamin-checkbox input[type="checkbox"], .regulamin-checkbox [role="checkbox"], input[role="checkbox"][id^="input-"]');
+                          if (!cb) return true;
+                          if (cb.type === 'checkbox') return !!cb.checked;
+                          var ariaChecked = cb.getAttribute('aria-checked');
+                          return ariaChecked === 'true';
+                        } catch(_) { return true; }
+                      })();
+                      if (!agreed) {
+                        try {
+                          if (!window.__flutterTriggeringAgreement) {
+                            window.__flutterTriggeringAgreement = true;
+                            tryTriggerAgreementError();
+                            setTimeout(function(){ window.__flutterTriggeringAgreement = false; }, 50);
+                          }
+                        } catch(_) {}
+                        return;
+                      }
+
                       e.preventDefault(); e.stopPropagation();
-                      try {
-                        var q = new URLSearchParams(location.search);
-                        var company = q.get('company_name') || '';
-                        var clientId = 'it.2take.login';
-                        var redirectUrl = 'https://login.2take.it/api/web/user/apple-login?cn=' + encodeURIComponent(company);
-                        var responseType = 'code%20id_token';
-                        var scope = 'name%20email';
-                        var responseMode = 'form_post';
-                        var link = 'https://appleid.apple.com/auth/authorize?client_id=' + clientId
-                          + '&redirect_uri=' + encodeURIComponent(redirectUrl)
-                          + '&response_type=' + responseType
-                          + '&scope=' + scope
-                          + '&response_mode=' + responseMode;
-                        try { console.log('[APPLE][intercept] company=', company, ' redirect=', redirectUrl); } catch(_) {}
-                        window.prompt('apple_oauth', link);
-                      } catch(_) {}
+                      try { console.log('[APPLE][intercept] native sign-in'); } catch(_) {}
+                      try { window.prompt('apple_native_signin', ''); } catch(_) {}
                       return false;
                     } catch(_) {}
                   }, true);
+                  }
                 } catch(_) {}
 
                     // Observe DOM for dynamically added Google buttons
@@ -1776,7 +1808,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   window.onFlutterAppleSignIn = async function(p){
                     try {
                       const idToken = (p && p.idToken) ? String(p.idToken) : '';
-                      if (!idToken) { console.error('No idToken provided (apple)'); return false; }
+                      const authCode = (p && p.code) ? String(p.code) : '';
+                      if (!idToken && !authCode) { console.error('No idToken or code provided (apple)'); return false; }
+                      const accessToken = idToken || authCode;
 
                       const q = new URLSearchParams(location.search);
                       const company = q.get('company_name') || (window.companyconfig && window.companyconfig.getCompanyIdfromUrl && window.companyconfig.getCompanyIdfromUrl()) || '';
@@ -1791,7 +1825,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             credentials: 'include',
-                            body: JSON.stringify({ access_token: idToken, company_url: company, invite_code: '', legacy })
+                            body: JSON.stringify({ access_token: accessToken, authorization_code: authCode, company_url: company, invite_code: '', legacy })
                           });
                           const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
                           if (r.ok && ct.indexOf('application/json') >= 0) {
@@ -1822,7 +1856,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           const r = await fetch(url, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ access_token: idToken, company_url: company, invite_code: '', legacy })
+                            body: JSON.stringify({ access_token: accessToken, authorization_code: authCode, company_url: company, invite_code: '', legacy })
                           });
                           console.log('[NATIVE->WEB][APPLE] login http', r.status);
                           if (r.ok) {
@@ -3238,12 +3272,15 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   debugPrint('[APPLE][native] got tokens idTokenLen=' + (idToken.length.toString()) + ' codeLen=' + (authCode.length.toString()));
                   if (idToken.isNotEmpty || authCode.isNotEmpty) {
                     final js = """
-                      (function(){
+                      (async function(){
                         try {
-                          console.log('[NATIVE->WEB][APPLE] tokens ready, posting to redirect endpoint');
-                          // Prefer site hook if present
+                          console.log('[NATIVE->WEB][APPLE] tokens ready');
                           if (typeof window.onFlutterAppleSignIn === 'function') {
-                            try { window.onFlutterAppleSignIn({ idToken: '${idToken.replaceAll("'","\\'")}', code: '${authCode.replaceAll("'","\\'")}' }); return; } catch(e) {}
+                            var res = await window.onFlutterAppleSignIn({
+                              idToken: '${idToken.replaceAll("'","\\'")}',
+                              code: '${authCode.replaceAll("'","\\'")}'
+                            });
+                            if (res) return;
                           }
                           var q = new URLSearchParams(location.search);
                           var company = q.get('company_name') || '';
@@ -3255,11 +3292,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           function add(name, val){ var i=document.createElement('input'); i.type='hidden'; i.name=name; i.value=val; f.appendChild(i); }
                           if ('${idToken.replaceAll("'","\\'")}'.length) add('id_token', '${idToken.replaceAll("'","\\'")}'.toString());
                           if ('${authCode.replaceAll("'","\\'")}'.length) add('code', '${authCode.replaceAll("'","\\'")}'.toString());
-                          // Apple may also send state in web flow; not available here, so omit
                           document.body.appendChild(f);
-                          try { console.log('[NATIVE->WEB][APPLE] submitting form to', action, ' idTokenLen=', '${idToken.length}', ' codeLen=', '${authCode.length}'); } catch(_){ }
+                          try { console.log('[NATIVE->WEB][APPLE] submitting form to', action); } catch(_){ }
                           f.submit();
-                        } catch(e) { console.error('[NATIVE->WEB][APPLE] form post failed', e); }
+                        } catch(e) { console.error('[NATIVE->WEB][APPLE] native handoff failed', e); }
                       })();
                     """;
                     await _inAppController?.evaluateJavascript(source: js);
