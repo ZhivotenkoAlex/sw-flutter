@@ -41,7 +41,7 @@
         <meta-data android:name="com.facebook.sdk.ClientToken" android:value="@string/facebook_client_token" />
         <provider
             android:name="com.facebook.FacebookContentProvider"
-            android:authorities="${applicationId}.FacebookContentProvider"
+            android:authorities="@string/facebook_content_provider_authority"
             android:exported="true" />
         <activity
             android:name="com.facebook.FacebookActivity"
@@ -131,5 +131,10 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="geo" />
         </intent>
+        <!-- Facebook SDK: package visibility for API 30+ -->
+        <package android:name="com.facebook.katana" />
+        <package android:name="com.facebook.lite" />
+        <package android:name="com.facebook.orca" />
+        <package android:name="com.instagram.android" />
     </queries>
 </manifest>

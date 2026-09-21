@@ -18,6 +18,9 @@ project 'Runner', {
   'Debug-polbauDemo' => :debug,
   'Profile-polbauDemo' => :release,
   'Release-polbauDemo' => :release,
+  'Debug-wislanka' => :debug,
+  'Profile-wislanka' => :release,
+  'Release-wislanka' => :release,
 }
 
 def flutter_root
@@ -49,5 +52,8 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+    end
   end
 end

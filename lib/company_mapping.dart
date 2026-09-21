@@ -67,6 +67,7 @@ class CompanyMapping {
       'com.polbau.polbau': 'polbau-demo',
       'com.polbau.polbau-demo': 'polbau-demo',
       'com.wislanka.wislanka': 'wislanka',
+      'it.2take.galeriawislanka': 'wislanka',
       'com.starybrowar.stary_browar': 'stary-browar',
       // Add more mappings as needed
     };

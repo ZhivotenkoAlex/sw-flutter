@@ -46,6 +46,7 @@ const Map<String, String> _googleAuthClientIds = {
   'galeria-kazimierz': '839029981684-v8su4cmc72t498k2evmejnohi0pk7v3c.apps.googleusercontent.com',
   'kazimierz-club-new': '159120615271-s2fbutrvvgk39rq71fafmeadksmk4g4d.apps.googleusercontent.com',
   'polbau-demo': '235700920701-0gh8pnikbhue765jjmrmhjiq3l4gqo6c.apps.googleusercontent.com',
+  'wislanka': '976320651084-vfr0ldstll288sj2lt1fpctujg9gi6hl.apps.googleusercontent.com',
 };
 
 /// iOS native OAuth client IDs (must match bundle + Firebase iOS app)
@@ -53,6 +54,7 @@ const Map<String, String> _googleAuthIosClientIds = {
   'galeria-kazimierz': '839029981684-kq8kc6rt5kkfqbameeui336gg5mipn55.apps.googleusercontent.com',
   'kazimierz-club-new': '159120615271-9bm2apos0nn46hk1n56vlm611raqc1fb.apps.googleusercontent.com',
   'polbau-demo': '235700920701-l8mf0rra93e3e11pci4tgptqj5g28lla.apps.googleusercontent.com',
+  'wislanka': '976320651084-gqjecp7shq25uiaf1ireldj12j7ap6oh.apps.googleusercontent.com',
 };
 
 const String _polbauProdIosClientId =

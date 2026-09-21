@@ -11,7 +11,7 @@ PLATFORM=$2
 MODE=${3:-debug}
 
 # Package IDs for all flavors
-ALL_PACKAGES="pl.a2ti.galeriakazimierz com.skanujwygrywaj.skanuj_wygrywaj pl.a2ti.mojagaleria com.polbau.polbau com.polbau.polbau_demo"
+ALL_PACKAGES="pl.a2ti.galeriakazimierz com.skanujwygrywaj.skanuj_wygrywaj pl.a2ti.mojagaleria com.polbau.polbau com.polbau.polbau_demo com.wislanka.wislanka"
 
 if [ -z "$FLAVOR" ] || [ -z "$PLATFORM" ]; then
     echo "Usage: $0 <flavor> <platform> [mode]"
@@ -20,6 +20,7 @@ if [ -z "$FLAVOR" ] || [ -z "$PLATFORM" ]; then
     echo "  - galeriaKazimierz"
     echo "  - galeriaKazimierzNew"
     echo "  - polbauDemo"
+    echo "  - wislanka"
     echo ""
     echo "Platforms:"
     echo "  - android"
@@ -35,9 +36,9 @@ if [ -z "$FLAVOR" ] || [ -z "$PLATFORM" ]; then
 fi
 
 # Validate flavor
-if [[ "$FLAVOR" != "galeriaKazimierz" ]] && [[ "$FLAVOR" != "galeriaKazimierzNew" ]] && [[ "$FLAVOR" != "polbauDemo" ]]; then
+if [[ "$FLAVOR" != "galeriaKazimierz" ]] && [[ "$FLAVOR" != "galeriaKazimierzNew" ]] && [[ "$FLAVOR" != "polbauDemo" ]] && [[ "$FLAVOR" != "wislanka" ]]; then
     echo "❌ Invalid flavor: $FLAVOR"
-    echo "Valid flavors: galeriaKazimierz, galeriaKazimierzNew, polbauDemo"
+    echo "Valid flavors: galeriaKazimierz, galeriaKazimierzNew, polbauDemo, wislanka"
     exit 1
 fi
 

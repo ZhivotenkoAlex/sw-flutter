@@ -192,7 +192,9 @@ class MyApp extends StatelessWidget {
         );
     
     return MaterialApp(
-      title: FlavorConfig.isInitialized && FlavorConfig.instance.flavor == FlavorType.polbauDemo
+      title: FlavorConfig.isInitialized &&
+              (FlavorConfig.instance.flavor == FlavorType.polbauDemo ||
+                  FlavorConfig.instance.flavor == FlavorType.wislanka)
           ? FlavorConfig.instance.name
           : (isLegacyMode ? 'Skanuj Wygrywaj' : 'Skanuj Wygrywaj New'),
       theme: appTheme,

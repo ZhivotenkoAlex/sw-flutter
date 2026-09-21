@@ -10,6 +10,9 @@ case "${CONFIGURATION}" in
   Release-polbauDemo)
     SOURCE="${SRCROOT}/Runner/polbauDemo/GoogleService-Info.plist"
     ;;
+  Debug-wislanka|Profile-wislanka|Release-wislanka)
+    SOURCE="${SRCROOT}/Runner/wislanka/GoogleService-Info.plist"
+    ;;
   *)
     exit 0
     ;;

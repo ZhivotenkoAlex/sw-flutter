@@ -209,16 +209,23 @@ class SecureConfigService {
     // Try persistent cache first, but check version in Firestore
     if (!forceRefresh) {
       final cachedConfig = await _loadFromCache();
-      if (cachedConfig != null && !_isCacheExpired(cachedConfig)) {
+      if (cachedConfig != null && cachedConfig.companyId != companyId) {
+        print('[SecureConfig] Clearing cache for ${cachedConfig.companyId}, expected $companyId');
+        await clearCache();
+      } else if (cachedConfig != null && !_isCacheExpired(cachedConfig)) {
         // Check if newer version is available in Firestore
         try {
           final remoteVersion = await _getRemoteVersion(companyId);
-          if (remoteVersion != null && remoteVersion > cachedConfig.version) {
+          if (remoteVersion == null) {
+            print('[SecureConfig] Remote config missing for $companyId, clearing stale cache');
+            await clearCache();
+            forceRefresh = true;
+          } else if (remoteVersion > cachedConfig.version) {
             // Clear old cache before fetching new config
             await clearCache();
             // Version is newer, fetch fresh config
             forceRefresh = true;
-          } else if (remoteVersion != null && remoteVersion < cachedConfig.version) {
+          } else if (remoteVersion < cachedConfig.version) {
             // Remote version is older than cached (shouldn't happen, but clear cache to be safe)
             print('[SecureConfig] Warning: Remote version ($remoteVersion) is older than cached (${cachedConfig.version}), clearing cache');
             await clearCache();
@@ -228,9 +235,13 @@ class SecureConfigService {
             return cachedConfig;
           }
         } catch (e) {
-          // If version check fails, use cached config
-          _memoryCache = cachedConfig;
-          return cachedConfig;
+          // If version check fails, use cached config only when company matches
+          if (cachedConfig.companyId == companyId) {
+            _memoryCache = cachedConfig;
+            return cachedConfig;
+          }
+          await clearCache();
+          forceRefresh = true;
         }
       } else if (cachedConfig != null && _isCacheExpired(cachedConfig)) {
         // Cache expired, clear it
@@ -249,16 +260,25 @@ class SecureConfigService {
       return config;
     } catch (e) {
       print('[SecureConfig] Error fetching from Firestore: $e');
-      
-      // Fallback to stale cache if available
+
+      final isMissingDoc = e.toString().contains('Config document not found');
+      if (isMissingDoc) {
+        await clearCache();
+        throw Exception(
+          'Config document not found in Firestore database skanuj-wygrywaj/mobile_configs/$companyId. '
+          'Create the document in the named database (not default).',
+        );
+      }
+
+      // Fallback to stale cache only when it matches the requested company
       final cachedConfig = await _loadFromCache();
-      if (cachedConfig != null) {
+      if (cachedConfig != null && cachedConfig.companyId == companyId) {
+        print('[SecureConfig] Using stale cache for $companyId after fetch error');
         _memoryCache = cachedConfig;
         return cachedConfig;
       }
-      
-      // No cache available, throw error
-      throw Exception('Failed to fetch config and no cache available: $e');
+
+      throw Exception('Failed to fetch config and no matching cache available: $e');
     }
   }
 

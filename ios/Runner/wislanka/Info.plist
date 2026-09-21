@@ -4,6 +4,8 @@
 <dict>
 	<key>CFBundleDisplayName</key>
 	<string>Wislanka</string>
+	<key>GIDClientID</key>
+	<string>976320651084-gqjecp7shq25uiaf1ireldj12j7ap6oh.apps.googleusercontent.com</string>
 </dict>
 </plist>
 
