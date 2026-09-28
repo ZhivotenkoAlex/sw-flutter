@@ -114,7 +114,7 @@ class FlavorConfig {
         return FlavorConfig(
           flavor: FlavorType.wislanka,
           name: 'Wislanka',
-          packageId: 'com.wislanka.wislanka',
+          packageId: 'pl.a2ti.galeriawislanka',
           companyId: 'wislanka',
         );
 

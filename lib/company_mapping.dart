@@ -66,6 +66,7 @@ class CompanyMapping {
       'pl.a2ti.mojagaleria': 'polbau-demo',
       'com.polbau.polbau': 'polbau-demo',
       'com.polbau.polbau-demo': 'polbau-demo',
+      'pl.a2ti.galeriawislanka': 'wislanka',
       'com.wislanka.wislanka': 'wislanka',
       'it.2take.galeriawislanka': 'wislanka',
       'com.starybrowar.stary_browar': 'stary-browar',

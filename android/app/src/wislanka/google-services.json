@@ -7,17 +7,25 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:976320651084:android:6a8b10723654e3e33f79e9",
+        "mobilesdk_app_id": "1:976320651084:android:c788a7ac5e956bb93f79e9",
         "android_client_info": {
-          "package_name": "com.wislanka.wislanka"
+          "package_name": "pl.a2ti.galeriawislanka"
         }
       },
       "oauth_client": [
         {
-          "client_id": "976320651084-drol9ddm7htupgqjl9bkvrnmv7r76e96.apps.googleusercontent.com",
+          "client_id": "976320651084-2icbr8rcil95poqae4nj6sriuikmfjdq.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.wislanka.wislanka",
+            "package_name": "pl.a2ti.galeriawislanka",
+            "certificate_hash": "62999ab533631e224b1a978aae9b5c63fe625a5e"
+          }
+        },
+        {
+          "client_id": "976320651084-n65287vnvk1srk262su2t4co3211mdjo.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "pl.a2ti.galeriawislanka",
             "certificate_hash": "52e33b57ed7f464c2d3cc297c098ce6e458f4577"
           }
         },
@@ -37,6 +45,13 @@
             {
               "client_id": "976320651084-vfr0ldstll288sj2lt1fpctujg9gi6hl.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "976320651084-gqjecp7shq25uiaf1ireldj12j7ap6oh.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "it.2take.galeriawislanka"
+              }
             }
           ]
         }

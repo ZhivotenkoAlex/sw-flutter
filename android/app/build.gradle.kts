@@ -71,7 +71,7 @@ android {
 
         create("wislanka"){
             dimension = "company"
-            applicationId = "com.wislanka.wislanka"
+            applicationId = "pl.a2ti.galeriawislanka"
             resValue("string", "app_name", "Wislanka")
             buildConfigField("String", "FLAVOR_NAME", "\"wislanka\"")
         }

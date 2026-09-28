@@ -11,7 +11,7 @@ PLATFORM=$2
 MODE=${3:-debug}
 
 # Package IDs for all flavors
-ALL_PACKAGES="pl.a2ti.galeriakazimierz com.skanujwygrywaj.skanuj_wygrywaj pl.a2ti.mojagaleria com.polbau.polbau com.polbau.polbau_demo com.wislanka.wislanka"
+ALL_PACKAGES="pl.a2ti.galeriakazimierz com.skanujwygrywaj.skanuj_wygrywaj pl.a2ti.mojagaleria com.polbau.polbau com.polbau.polbau_demo pl.a2ti.galeriawislanka"
 
 if [ -z "$FLAVOR" ] || [ -z "$PLATFORM" ]; then
     echo "Usage: $0 <flavor> <platform> [mode]"

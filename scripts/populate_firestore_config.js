@@ -172,7 +172,7 @@ const configs = {
                 projectId: 'YOUR_PROJECT_ID',
                 storageBucket: 'YOUR_STORAGE_BUCKET',
                 databaseURL: 'YOUR_DATABASE_URL',
-                iosBundleId: 'com.wislanka.wislanka'
+                iosBundleId: 'it.2take.galeriawislanka'
             }
         },
         webviewUrl: 'https://YOUR_WEBVIEW_URL?company_name=wislanka',
