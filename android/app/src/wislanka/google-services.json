@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "976320651084-mvptvrtdfe57jissdnalchao204vtpqg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "pl.a2ti.galeriawislanka",
+            "certificate_hash": "a1e785adbfbac18dad4f832c33b33ebcf4f9988d"
+          }
+        },
+        {
           "client_id": "976320651084-n65287vnvk1srk262su2t4co3211mdjo.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
