@@ -47,6 +47,7 @@ const Map<String, String> _googleAuthClientIds = {
   'kazimierz-club-new': '159120615271-s2fbutrvvgk39rq71fafmeadksmk4g4d.apps.googleusercontent.com',
   'polbau-demo': '235700920701-0gh8pnikbhue765jjmrmhjiq3l4gqo6c.apps.googleusercontent.com',
   'wislanka': '976320651084-vfr0ldstll288sj2lt1fpctujg9gi6hl.apps.googleusercontent.com',
+  'galeria-wislanka-demo': '976320651084-vfr0ldstll288sj2lt1fpctujg9gi6hl.apps.googleusercontent.com',
 };
 
 /// iOS native OAuth client IDs (must match bundle + Firebase iOS app)
@@ -55,6 +56,7 @@ const Map<String, String> _googleAuthIosClientIds = {
   'kazimierz-club-new': '159120615271-9bm2apos0nn46hk1n56vlm611raqc1fb.apps.googleusercontent.com',
   'polbau-demo': '235700920701-l8mf0rra93e3e11pci4tgptqj5g28lla.apps.googleusercontent.com',
   'wislanka': '976320651084-gqjecp7shq25uiaf1ireldj12j7ap6oh.apps.googleusercontent.com',
+  'galeria-wislanka-demo': '976320651084-gqjecp7shq25uiaf1ireldj12j7ap6oh.apps.googleusercontent.com',
 };
 
 const String _polbauProdIosClientId =
@@ -2769,6 +2771,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
               // For galeriaKazimierz and galeriaKazimierzNew flavors, default to old project's companyId
               // This ensures Android OAuth Client (SHA-1) matches the configured google-services.json
               authCompanyId = 'galeria-kazimierz';
+            } else if (FlavorConfig.isInitialized &&
+                FlavorConfig.instance.flavor == FlavorType.wislanka) {
+              // Firestore companyId is often galeria-wislanka-demo; OAuth must stay wislanka-c91c2
+              authCompanyId = 'wislanka';
+            } else if (FlavorConfig.isInitialized &&
+                FlavorConfig.instance.flavor == FlavorType.polbauDemo) {
+              authCompanyId = 'polbau-demo';
             } else {
               // For other flavors without explicit googleAuthCompanyId, use companyId from config
               authCompanyId = companyId;
